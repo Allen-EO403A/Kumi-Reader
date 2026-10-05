@@ -1,0 +1,30 @@
+{
+    "interface_version": 2,
+    "name": "Kumi 家族成員讀取程式",
+    "description": "讀取「忍者必須死3」家族面板的成員暱稱、UID 與職位，上傳到 Kumi（SS+ 管理系統）。",
+    "version": "0.1.0",
+    "controller": [
+        {
+            "name": "雷電模擬器（ADB）",
+            "type": "Adb",
+            "display_raw": true
+        }
+    ],
+    "resource": [
+        {
+            "name": "預設",
+            "path": ["./resource"]
+        }
+    ],
+    "agent": {
+        "child_exec": "./python/python.exe",
+        "child_args": ["-u", "./agent/main.py"]
+    },
+    "task": [
+        {
+            "name": "讀取家族成員",
+            "entry": "ReadMembers",
+            "description": "開始前請關閉模擬器的按鍵提示，並打開家族面板的「成員」分頁。"
+        }
+    ]
+}

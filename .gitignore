@@ -1,0 +1,20 @@
+# 憑證
+.env
+# 執行時產生的資料：安裝識別碼、本機暫存、紀錄
+data/
+debug/
+logs/
+# OCR 模型（tools/download_ocr_model.py 下載）
+assets/resource/model/ocr/*
+!assets/resource/model/ocr/.gitkeep
+# 測試用截圖含其他玩家的暱稱與 UID，不提交
+samples/*
+!samples/README.md
+# 打包輸出
+install/
+dist/
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

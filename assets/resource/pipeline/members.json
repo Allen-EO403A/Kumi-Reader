@@ -1,0 +1,9 @@
+{
+    "ReadMembers": {
+        "recognition": { "type": "DirectHit" },
+        "action": {
+            "type": "Custom",
+            "param": { "custom_action": "ReadMembers" }
+        }
+    }
+}
