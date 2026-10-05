@@ -1,6 +1,7 @@
 """開發用：不經 MFAAvalonia，直接連雷電模擬器執行「讀取家族成員」。
 
-用法：python tools/dev_run.py
+用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1]
+不帶參數時列出所有模擬器並連第一台。
 需要：模擬器已開啟並停在家族「成員」分頁、`.env` 已填寫、已下載 OCR 模型。
 """
 from __future__ import annotations
@@ -25,8 +26,15 @@ def main() -> int:
     if not devices:
         print("找不到模擬器。請先開啟雷電模擬器（必要時以系統管理員身分執行）。")
         return 1
-    dev = devices[0]
-    print(f"連線：{dev.name} {dev.address}")
+    for d in devices:
+        print(f"找到模擬器：{d.name}（{d.address}）")
+    wanted = sys.argv[1] if len(sys.argv) > 1 else None
+    matches = [d for d in devices if not wanted or wanted in d.name or wanted in d.address]
+    if not matches:
+        print(f"找不到名稱或位址包含「{wanted}」的模擬器。")
+        return 1
+    dev = matches[0]
+    print(f"連線：{dev.name}（{dev.address}）")
     ctrl = AdbController(
         adb_path=dev.adb_path,
         address=dev.address,
