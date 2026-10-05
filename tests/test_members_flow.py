@@ -90,12 +90,26 @@ def test_stops_at_bottom_when_scrolling_changes_nothing():
     rows = make_rows(6)
     game = FakeGame([Page(TOPS, rows)], expected=8)  # 應讀 8 人，但名單只有 6 列
     result = F.MembersReader(game).run()
-    assert result.complete  # 已到底
+    assert not result.complete  # 已到底但人數不符：不算讀完
+    assert "少 2 人" in result.stop_reason
     assert len(result.members) == 6
     body = F.build_upload(result, batch_id=None)
-    assert body["status"] == "complete"
+    assert body["status"] == "incomplete"
     assert body["expectedCount"] == 8
     assert "batchId" not in body
+
+
+def test_resumes_without_reopening_known_members():
+    rows = make_rows(6)
+    first = F.MembersReader(FakeGame([Page(TOPS, rows)], expected=6))
+    saved = {}
+    first.on_progress = lambda result, done: saved.update(members=dict(result.members), done=set(done))
+    first.run()
+    game = FakeGame([Page(TOPS, rows)], expected=6)
+    result = F.MembersReader(game, done_keys=saved["done"], known=saved["members"]).run()
+    assert result.complete
+    assert len(result.members) == 6
+    assert game.clicks == []  # 都讀過了：不再開個人視窗
 
 
 def test_unreadable_uid_is_counted_as_failed_row():

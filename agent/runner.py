@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import json
+import time
+from pathlib import Path
 
+import numpy as np
 from maa.context import Context
 from maa.custom_action import CustomAction
 
@@ -16,8 +19,33 @@ from kumi_reader.device import MaaDevice
 from kumi_reader.session import Session, start_session
 from members_flow import MembersReader, MembersResult, build_upload
 
-# 未完成的批次 ID：下次執行時接續（後端以 UID 去重合併）
-PENDING_BATCH_FILE = "member-batch.json"
+# 未讀完時的進度：批次 ID、已讀成員、已處理的列。下次執行接續，已讀的人不再開個人視窗。
+PROGRESS_FILE = "members-progress.json"
+
+
+def load_progress(data_dir: Path) -> dict:
+    path = data_dir / PROGRESS_FILE
+    if not path.exists():
+        return {"batchId": None, "members": {}, "doneKeys": []}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_progress(data_dir: Path, progress: dict) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / PROGRESS_FILE).write_text(json.dumps(progress, ensure_ascii=False), encoding="utf-8")
+
+
+def save_debug_image(data_dir: Path, image: np.ndarray | None) -> None:
+    """停止時的畫面存到 data/debug/，方便查原因（含其他玩家資料，不上傳、不提交）。"""
+    if image is None:
+        return
+    from PIL import Image
+
+    folder = data_dir / "debug"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"stop-{time.strftime('%Y%m%d-%H%M%S')}.png"
+    Image.fromarray(image[:, :, ::-1]).save(path)
+    log.info(f"停止時的畫面已存到 {path}")
 
 
 class ReadMembersAction(CustomAction):
@@ -27,19 +55,35 @@ class ReadMembersAction(CustomAction):
         session = start_session("members")
         if session is None:
             return False
+        progress = load_progress(session.data_dir)
+        if progress["members"]:
+            log.info(f"接續上次的進度：已讀 {len(progress['members'])} 人，這次只讀還沒讀過的。")
         log.info("開始讀取家族成員…")
-        result = MembersReader(MaaDevice(context)).run()
+
+        def on_progress(result: MembersResult, done: set) -> None:
+            progress["members"] = result.members
+            progress["doneKeys"] = [list(k) for k in done]
+            save_progress(session.data_dir, progress)
+
+        reader = MembersReader(
+            MaaDevice(context),
+            done_keys={tuple(k) for k in progress["doneKeys"]},
+            known=progress["members"],
+            on_progress=on_progress,
+        )
+        result = reader.run()
+        if result.stop_reason:
+            save_debug_image(session.data_dir, reader.last_image)
         if result.stop_reason and not result.members:
             log.error(result.stop_reason)
             return False
         if result.stop_reason:
             log.warn(result.stop_reason)
-        return upload(session, result)
+        return upload(session, result, progress)
 
 
-def upload(session: Session, result: MembersResult) -> bool:
-    state_file = session.data_dir / PENDING_BATCH_FILE
-    batch_id = json.loads(state_file.read_text(encoding="utf-8"))["batchId"] if state_file.exists() else None
+def upload(session: Session, result: MembersResult, progress: dict) -> bool:
+    batch_id = progress.get("batchId")
     body = build_upload(result, batch_id)
     log.info(f"讀到 {len(result.members)} 人（應讀 {result.expected} 人）" + (f"，{result.failed_rows} 列讀取失敗" if result.failed_rows else ""))
     try:
@@ -60,11 +104,11 @@ def upload(session: Session, result: MembersResult) -> bool:
         return False
 
     if res["status"] == "incomplete":
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-        state_file.write_text(json.dumps({"batchId": res["batchId"]}), encoding="utf-8")
-        log.warn("這次沒有讀完，已上傳讀到的部分。下次執行時會接續同一批次。")
+        progress["batchId"] = res["batchId"]
+        save_progress(session.data_dir, progress)
+        log.warn("這次沒有讀完，已上傳讀到的部分。下次執行時會接續，已讀的人不會重讀。")
     else:
-        state_file.unlink(missing_ok=True)
+        (session.data_dir / PROGRESS_FILE).unlink(missing_ok=True)
     log.success(
         f"已上傳家族成員：實讀 {res['readCount']} / 應讀 {res['expectedCount']} 人；"
         f"新成員 {res['newMembers']}、改名 {res['renamed']}、重新入族 {res['rejoined']}、"

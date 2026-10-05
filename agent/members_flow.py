@@ -92,10 +92,25 @@ class MembersResult:
 
 
 class MembersReader:
-    def __init__(self, device: Device, max_pages: int = 60, retries: int = 3):
+    """done_keys／known：先前讀過的列與成員（接續同一批次時略過，不再開個人視窗）。
+    on_progress：每讀完一列呼叫一次，讓呼叫端存檔（中途停止也不會白讀）。"""
+
+    def __init__(
+        self,
+        device: Device,
+        max_pages: int = 60,
+        retries: int = 3,
+        done_keys: set[tuple[str, str]] | None = None,
+        known: dict[str, dict] | None = None,
+        on_progress=None,
+    ):
         self.d = device
         self.max_pages = max_pages
         self.retries = retries
+        self.done_keys = set(done_keys or ())
+        self.known = dict(known or {})
+        self.on_progress = on_progress or (lambda result, done: None)
+        self.last_image: np.ndarray | None = None  # 停止時的畫面（除錯用）
 
     # -- 畫面確認 --
     def _on_list(self, image: np.ndarray) -> bool:
@@ -105,8 +120,22 @@ class MembersReader:
         for _ in range(tries or self.retries + 2):
             self.d.sleep(seconds)
             image = self.d.screencap()
+            self.last_image = image
             if check(image):
                 return image
+        return None
+
+    def _profile_open(self, image: np.ndarray) -> bool:
+        return "個人" in self.d.ocr(image, PROFILE_TAB_ROI)
+
+    def _back_to_list(self) -> np.ndarray | None:
+        """關閉個人視窗後回到列表；若視窗還開著（關閉沒點到），再點一次 X。"""
+        for _ in range(self.retries):
+            image = self._wait(self._on_list, seconds=0.8, tries=5)
+            if image is not None:
+                return image
+            if self.last_image is not None and self._profile_open(self.last_image):
+                self.d.click(*PROFILE_CLOSE)  # 視窗還開著時，這個位置是視窗的 X，點了是安全的
         return None
 
     # -- 主流程 --
@@ -120,7 +149,8 @@ class MembersReader:
         result.expected = count[0]
         image = self._scroll_to_top(image)
 
-        done_rows: set[tuple] = set()
+        done_rows: set[tuple] = set(self.done_keys)
+        result.members.update(self.known)
         for _page in range(self.max_pages):
             page_keys = self._page_keys(image)
             for top, key in page_keys:
@@ -135,8 +165,8 @@ class MembersReader:
                     result.members.setdefault(member["uid"], member)
                     log.info(f"已讀 {len(result.members)} / {result.expected} 人：{member['name'] or '（讀不出暱稱）'}")
                 done_rows.add(key)
-                # 個人視窗關閉的動畫有時較久：最多等約 8 秒
-                image = self._wait(self._on_list, seconds=0.8, tries=10)
+                self.on_progress(result, done_rows)
+                image = self._back_to_list()
                 if image is None:
                     result.stop_reason = "關閉個人視窗後沒有回到成員列表，已停止。"
                     return result
@@ -147,7 +177,13 @@ class MembersReader:
             before = image
             image = self._drag(DRAG_FROM, DRAG_TO)
             if not region_changed(before, image, LIST_REGION):
-                result.complete = True  # 滑動後畫面不變：已到底
+                # 已到底：人數相符才算讀完，否則提示缺幾人
+                missing = (result.expected or 0) - len(result.members)
+                result.complete = missing <= 0
+                if not result.complete:
+                    result.stop_reason = (
+                        f"已到名單底部，但只讀到 {len(result.members)} / {result.expected} 人，少 {missing} 人。"
+                    )
                 return result
             # 新畫面必須與上一頁有重疊的列，否則可能滑過頭漏讀：往回拖再確認
             previous = {key for _, key in page_keys}
@@ -188,7 +224,7 @@ class MembersReader:
     def _read_profile(self, top: int) -> dict | None:
         """點頭像 → 個人資訊 → 讀暱稱與 ID → 關閉。讀不出 UID 時回傳 None（這一列記為失敗）。"""
         self.d.click(*row_avatar(top))
-        if self._wait(lambda img: "個人" in self.d.ocr(img, PROFILE_TAB_ROI)) is None:
+        if self._wait(self._profile_open) is None:
             return None  # 沒開成個人視窗：不點任何其他地方，回列表繼續
         self.d.click(*PROFILE_TAB)
         member = None
