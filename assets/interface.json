@@ -2,7 +2,8 @@
     "interface_version": 2,
     "name": "Kumi 讀取程式",
     "description": "讀取「忍者必須死3」的家族成員與深淵排行，上傳到 Kumi（SS+ 管理系統）。",
-    "version": "0.1.1",
+    "version": "0.2.0",
+    "welcome": "使用說明.md",
     "controller": [
         {
             "name": "雷電模擬器（ADB）",

@@ -106,6 +106,7 @@ def install_app(version: str) -> None:
         ROOT / "agent", INSTALL / "agent",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"), dirs_exist_ok=True,
     )
+    shutil.copy2(ROOT / "assets" / "使用說明.md", INSTALL / "使用說明.md")  # MFAAvalonia 首次開啟時顯示
     shutil.copy2(ROOT / ".env.example", INSTALL / ".env.example")
     shutil.copy2(ROOT / "README.md", INSTALL / "README.md")
 
