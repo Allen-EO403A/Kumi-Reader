@@ -17,7 +17,7 @@ from maa.resource import Resource  # noqa: E402
 from maa.tasker import Tasker  # noqa: E402
 from maa.toolkit import Toolkit  # noqa: E402
 
-from actions import ReadMembers  # noqa: E402
+from runner import ReadMembersAction  # noqa: E402  不載入 actions（AgentServer）
 
 
 def main() -> int:
@@ -46,7 +46,7 @@ def main() -> int:
     ctrl.post_connection().wait()
     res = Resource()
     res.post_bundle(str(ROOT / "assets" / "resource")).wait()
-    res.register_custom_action("ReadMembers", ReadMembers())
+    res.register_custom_action("ReadMembers", ReadMembersAction())
     tasker = Tasker()
     tasker.bind(res, ctrl)
     if not tasker.inited:

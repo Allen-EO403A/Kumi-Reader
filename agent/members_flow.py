@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from kumi_reader import log
 from kumi_reader.device import Device, Roi, region_changed
 from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_role, parse_uid
 
@@ -132,6 +133,7 @@ class MembersReader:
                 else:
                     member["role"] = role
                     result.members.setdefault(member["uid"], member)
+                    log.info(f"已讀 {len(result.members)} / {result.expected} 人：{member['name'] or '（讀不出暱稱）'}")
                 done_rows.add(key)
                 image = self._wait(self._on_list)
                 if image is None:
