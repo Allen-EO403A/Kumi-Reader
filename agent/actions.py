@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from maa.agent.agent_server import AgentServer
 
-from runner import ReadMembersAction, ReadMembersPageAction
+from abyss_runner import ReadAbyssAction
+from key_setup import SetKeyAction
+from members_runner import ReadMembersAction, ReadMembersPageAction
 
+AgentServer.custom_action("SetKey")(SetKeyAction)
 AgentServer.custom_action("ReadMembers")(ReadMembersAction)
 AgentServer.custom_action("ReadMembersPage")(ReadMembersPageAction)
+AgentServer.custom_action("ReadAbyss")(ReadAbyssAction)

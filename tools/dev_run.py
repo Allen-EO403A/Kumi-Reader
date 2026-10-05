@@ -1,7 +1,7 @@
-"""開發用：不經 MFAAvalonia，直接連雷電模擬器執行「讀取家族成員」。
+"""開發用：不經 MFAAvalonia，直接連雷電模擬器執行讀取任務。
 
-用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1] [--page]
-加 --page 時執行「補讀目前畫面」。
+用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1] [--page | --abyss]
+預設「讀取家族成員」；--page 為「補讀目前畫面」；--abyss 為「讀取深淵排行」。
 不帶參數時列出所有模擬器並連第一台。
 需要：模擬器已開啟並停在家族「成員」分頁、`.env` 已填寫、已下載 OCR 模型。
 """
@@ -18,7 +18,8 @@ from maa.resource import Resource  # noqa: E402
 from maa.tasker import Tasker  # noqa: E402
 from maa.toolkit import Toolkit  # noqa: E402
 
-from runner import ReadMembersAction, ReadMembersPageAction  # noqa: E402  不載入 actions（AgentServer）
+from abyss_runner import ReadAbyssAction  # noqa: E402  不載入 actions（AgentServer）
+from members_runner import ReadMembersAction, ReadMembersPageAction  # noqa: E402
 
 
 def main() -> int:
@@ -51,12 +52,14 @@ def main() -> int:
     res.post_bundle(str(ROOT / "assets" / "resource")).wait()
     res.register_custom_action("ReadMembers", ReadMembersAction())
     res.register_custom_action("ReadMembersPage", ReadMembersPageAction())
+    res.register_custom_action("ReadAbyss", ReadAbyssAction())
     tasker = Tasker()
     tasker.bind(res, ctrl)
     if not tasker.inited:
         print("MaaFramework 初始化失敗。")
         return 1
-    detail = tasker.post_task("ReadMembersPage" if page_only else "ReadMembers").wait().get()
+    entry = "ReadAbyss" if "--abyss" in sys.argv else ("ReadMembersPage" if page_only else "ReadMembers")
+    detail = tasker.post_task(entry).wait().get()
     return 0 if detail and detail.status.succeeded else 1
 
 

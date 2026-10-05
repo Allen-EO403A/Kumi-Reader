@@ -1,7 +1,7 @@
 {
     "interface_version": 2,
-    "name": "Kumi 家族成員讀取程式",
-    "description": "讀取「忍者必須死3」家族面板的成員暱稱、UID 與職位，上傳到 Kumi（SS+ 管理系統）。",
+    "name": "Kumi 讀取程式",
+    "description": "讀取「忍者必須死3」的家族成員與深淵排行，上傳到 Kumi（SS+ 管理系統）。",
     "version": "0.1.1",
     "controller": [
         {
@@ -27,6 +27,14 @@
     },
     "task": [
         {
+            "name": "設定金鑰（從剪貼簿）",
+            "entry": "SetKey",
+            "option": [
+                "ApiUrl"
+            ],
+            "description": "第一次使用或換金鑰時執行：先在網站「讀取程式金鑰」頁產生金鑰並按「複製」，再執行這個任務。金鑰會寫進本機設定並清除剪貼簿，不會出現在紀錄檔。"
+        },
+        {
             "name": "讀取家族成員",
             "entry": "ReadMembers",
             "option": [
@@ -41,6 +49,11 @@
                 "ExpectedCount"
             ],
             "description": "人數對不上時使用：把名單移到缺少成員所在的那一頁後執行，只讀這一頁還沒讀過的成員，並上傳到同一批次。"
+        },
+        {
+            "name": "讀取深淵排行",
+            "entry": "ReadAbyss",
+            "description": "請在週五 21:00 深淵結束後、排行清空前執行。打開深淵排行榜的「家族狀況」分頁後執行；程式只滑動、不點擊。"
         }
     ],
     "option": {
@@ -66,6 +79,27 @@
                 "ReadMembersPage": {
                     "custom_action_param": {
                         "expectedCount": "{ExpectedCount}"
+                    }
+                }
+            }
+        },
+        "ApiUrl": {
+            "type": "input",
+            "label": "後端網址（選填）",
+            "description": "第一次設定時填寫，例如 https://api.kumi.example.org。之後留空會沿用原本的網址。",
+            "inputs": [
+                {
+                    "name": "ApiUrl",
+                    "label": "後端網址",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^(|https?://\\S+)$"
+                }
+            ],
+            "pipeline_override": {
+                "SetKey": {
+                    "custom_action_param": {
+                        "apiUrl": "{ApiUrl}"
                     }
                 }
             }

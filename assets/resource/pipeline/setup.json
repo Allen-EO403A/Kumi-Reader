@@ -1,0 +1,8 @@
+{
+    "SetKey": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "SetKey",
+        "custom_action_param": { "apiUrl": "" }
+    }
+}

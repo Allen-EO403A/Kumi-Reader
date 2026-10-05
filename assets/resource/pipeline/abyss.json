@@ -1,0 +1,7 @@
+{
+    "ReadAbyss": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "ReadAbyss"
+    }
+}
