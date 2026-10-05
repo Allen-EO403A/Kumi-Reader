@@ -28,6 +28,14 @@ def test_find_row_tops_on_synthetic_image():
     assert F.find_row_tops(synthetic([350, 463, 577, 690, 804, 917])) == [350, 463, 577, 690, 804]
 
 
+def test_find_row_tops_handles_top_of_list_and_highlighted_row():
+    # 名單在最上面：第一列上方沒有分隔線；自己那一列是藍底（不能被當成分隔線）
+    image = synthetic([399, 513, 626, 740, 853, 966])
+    image[628:740, :] = (167, 127, 110)  # BGR，藍底列約 RGB(110,127,167)
+    image[288:399, :] = (223, 241, 245)  # 列背景亮度與其他截圖不同
+    assert F.find_row_tops(image) == [286, 399, 513, 626, 740, 853]
+
+
 @pytest.mark.skipif(not SAMPLE.exists(), reason="需要 samples/member-list.png（實機截圖，不提交）")
 def test_find_row_tops_on_real_screenshot():
     rgb = np.array(Image.open(SAMPLE).convert("RGB"))

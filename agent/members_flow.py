@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from kumi_reader.device import Device, Roi, region_changed
-from kumi_reader.text import parse_member_count, parse_name, parse_role, parse_uid
+from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_role, parse_uid
 
 # ---- 成員列表 ----
 MEMBER_COUNT_ROI: Roi = (130, 762, 240, 52)  # 「成員：99/100」
@@ -52,20 +52,31 @@ SETTLE_SECONDS = 1.0
 LIST_REGION: Roi = (510, LIST_TOP, 1330, LIST_BOTTOM - LIST_TOP)
 
 
-def find_row_tops(image: np.ndarray) -> list[int]:
-    """找出完整露出的列：回傳每列上緣分隔線的 y（下一條分隔線也要在可視範圍內）。
+SEPARATOR_RGB = (205, 201, 170)  # 分隔線顏色（兩次實機截圖量到 203～205、199～201、169～176）
+SEPARATOR_TOLERANCE = 14
 
-    分隔線約 (203,199,170)、背景約 (219,217,199)，以空白欄的藍色通道平均值判斷。
+
+def find_row_tops(image: np.ndarray) -> list[int]:
+    """找出完整露出的列：回傳每列上緣的 y。
+
+    以「顏色接近分隔線」判斷分隔線（列背景亮度會變，自己那一列是藍底，都不能用單一門檻）。
+    名單在最上面時第一列上方沒有分隔線、在最下面時最後一列下方可能沒有，
+    所以頭尾各多推一列當候選；呼叫端要再確認該列有內容（貢獻度讀得到數字）。
     """
     x0, x1 = SEPARATOR_X
-    blue = image[LIST_TOP:LIST_BOTTOM, x0:x1, 0].astype(float).mean(axis=1)  # BGR 的 B
+    band = image[LIST_TOP:LIST_BOTTOM, x0:x1].astype(float).mean(axis=1)[:, ::-1]  # BGR → RGB
+    near = np.abs(band - np.array(SEPARATOR_RGB)).max(axis=1) <= SEPARATOR_TOLERANCE
     lines: list[int] = []
-    for offset, value in enumerate(blue):
-        if value < 185:
-            y = LIST_TOP + offset
-            if not lines or y - lines[-1] > 20:
-                lines.append(y)
-    return [a for a, b in zip(lines, lines[1:]) if 90 <= b - a <= 140]
+    for offset in np.flatnonzero(near):
+        y = LIST_TOP + int(offset)
+        if not lines or y - lines[-1] > 20:
+            lines.append(y)
+    tops = [a for a, b in zip(lines, lines[1:]) if 90 <= b - a <= 140]
+    if lines and lines[0] - ROW_HEIGHT >= LIST_TOP - 4:
+        tops.insert(0, lines[0] - ROW_HEIGHT)
+    if lines and lines[-1] + ROW_HEIGHT <= LIST_BOTTOM + 2 and (not tops or tops[-1] != lines[-1]):
+        tops.append(lines[-1])
+    return tops
 
 
 @dataclass
@@ -108,10 +119,10 @@ class MembersReader:
         done_rows: set[tuple] = set()
         for _page in range(self.max_pages):
             for top in find_row_tops(image):
-                key = (
-                    self.d.ocr(image, row_name_roi(top)),
-                    self.d.ocr(image, row_contribution_roi(top)),
-                )
+                contribution = self.d.ocr(image, row_contribution_roi(top))
+                if parse_int(contribution) is None:
+                    continue  # 不是成員列（頭尾推出來的候選位置沒有內容）
+                key = (self.d.ocr(image, row_name_roi(top)), contribution)
                 if key in done_rows:
                     continue  # 滑動後重複出現的列
                 role = parse_role(self.d.ocr(image, row_role_roi(top)))
