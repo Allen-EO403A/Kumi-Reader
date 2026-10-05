@@ -3,12 +3,16 @@
         "recognition": "DirectHit",
         "action": "Custom",
         "custom_action": "ReadMembers",
-        "custom_action_param": { "expectedCount": "" }
+        "custom_action_param": {
+            "expectedCount": ""
+        }
     },
-    "ReadMembersPage": {
+    "ReadMissingMembers": {
         "recognition": "DirectHit",
         "action": "Custom",
-        "custom_action": "ReadMembersPage",
-        "custom_action_param": { "expectedCount": "" }
+        "custom_action": "ReadMissingMembers",
+        "custom_action_param": {
+            "expectedCount": ""
+        }
     }
 }

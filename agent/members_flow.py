@@ -2,7 +2,8 @@
 
 流程：在「成員」分頁找出畫面上完整露出的每一列 → 從列表讀職位 → 點頭像開個人視窗
 → 點「個人資訊」分頁 → 讀暱稱與 ID → 點 X 關閉 → 這一頁做完就往上滑 → 滑動後畫面不變代表到底。
-每一步先確認畫面；畫面不符時重試，仍不符就停下並上傳已讀部分（批次標為未完成）。
+每一步先確認畫面；畫面不符時重試，仍不符就停下，已讀部分存在本機（之後補讀或上傳）。
+補讀時傳入先前的進度，同樣從最上面滑到底，只開還沒讀過的列。
 座標為 1920×1080 原始解析度，取自實機截圖（2026-10-03、10-04）。
 """
 from __future__ import annotations
@@ -161,12 +162,12 @@ class MembersReader:
                 role = parse_role(self.d.ocr(image, row_role_roi(top)))
                 member = self._read_profile(top)
                 if member is None:
-                    result.failed_rows += 1
+                    result.failed_rows += 1  # 不記為已處理：補讀時會再試這一列
                 else:
                     member["role"] = role
                     result.members.setdefault(member["uid"], member)
                     log.info(f"已讀 {len(result.members)} / {result.expected} 人：{member['name'] or '（讀不出暱稱）'}")
-                done_rows.add(key)
+                    done_rows.add(key)
                 self.on_progress(result, done_rows)
                 image = self._back_to_list()
                 if image is None:
@@ -206,45 +207,6 @@ class MembersReader:
         if self.expected_override != on_screen:
             log.warn(f"輸入的成員數 {self.expected_override} 與畫面上的 {on_screen} 不同，以輸入的數字核對。")
         return self.expected_override
-
-    def run_page(self) -> MembersResult:
-        """補讀目前畫面：不滑動，只讀這一頁還沒讀過的列（decisions.md 第 19 節）。"""
-        result = MembersResult()
-        image = self.d.screencap()
-        count = parse_member_count(self.d.ocr(image, MEMBER_COUNT_ROI))
-        if count is None:
-            result.stop_reason = "目前不在家族面板的「成員」分頁。請把畫面移到缺少成員所在的那一頁後再執行。"
-            return result
-        result.expected = self._expected(count[0])
-        result.members.update(self.known)
-        done_rows: set[tuple] = set(self.done_keys)
-        new = 0
-        for top, key in self._page_keys(image):
-            if key in done_rows:
-                continue
-            role = parse_role(self.d.ocr(image, row_role_roi(top)))
-            member = self._read_profile(top)
-            if member is None:
-                result.failed_rows += 1
-            else:
-                member["role"] = role
-                if member["uid"] not in result.members:
-                    new += 1
-                    log.info(f"補讀：{member['name'] or '（讀不出暱稱）'}（貢獻度 {key[1]}）")
-                result.members[member["uid"]] = member
-            done_rows.add(key)
-            self.on_progress(result, done_rows)
-            image = self._back_to_list()
-            if image is None:
-                result.stop_reason = "關閉個人視窗後沒有回到成員列表，已停止。"
-                return result
-        if new == 0:
-            log.warn("這一頁的成員都已經讀過了。請把畫面移到缺少的成員所在的那一頁。")
-        missing = result.expected - len(result.members)
-        result.complete = missing <= 0
-        if not result.complete:
-            result.stop_reason = f"目前讀到 {len(result.members)} / {result.expected} 人，還少 {missing} 人。"
-        return result
 
     def _scroll_to_top(self, image: np.ndarray) -> np.ndarray:
         """名單可能停在中間或底部：一直往上拖到畫面不再改變。"""

@@ -176,11 +176,11 @@ class AbyssReader:
                     page, failed = self._read_page(image)
                     overlap = self._overlap(result, page)
                 if not overlap:
-                    result.stop_reason = "滑動後找不到與上一頁重疊的列，為避免名次錯位已停止並上傳已讀部分。"
+                    result.stop_reason = "滑動後找不到與上一頁重疊的列，為避免名次錯位已停止，已讀部分存在本機。"
                     return result
             self._append(result, page[overlap:])
             if failed:
-                result.stop_reason = f"第 {len(result.rows) + 1} 名的傷害或挑戰次數讀不出來，已停止並上傳已讀部分。"
+                result.stop_reason = f"第 {len(result.rows) + 1} 名的傷害或挑戰次數讀不出來，已停止，已讀部分存在本機。"
                 return result
             first_page = False
             before = image
@@ -188,7 +188,7 @@ class AbyssReader:
             if not region_changed(before, image, LIST_REGION):
                 result.complete = True  # 滑動後畫面不變：已到底
                 return result
-        result.stop_reason = "讀取頁數超過上限，已停止並上傳已讀部分。"
+        result.stop_reason = "讀取頁數超過上限，已停止，已讀部分存在本機。"
         return result
 
 

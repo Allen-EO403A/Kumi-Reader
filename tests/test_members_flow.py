@@ -140,32 +140,39 @@ def test_build_upload_resumes_incomplete_batch():
     }
 
 
-def test_read_page_only_reads_members_not_read_yet():
-    rows = make_rows(6)
-    # 先前讀到 5 人，少了第 3 位（例如被滑過）
-    first = FakeGame([Page(TOPS, rows)], expected=6)
+def test_resume_scrolls_whole_list_and_reads_only_missing_members():
+    rows = make_rows(9)
+    pages = [Page(TOPS, rows[0:6]), Page([350, 463, 577, 690, 804], rows[4:9])]
+    first = F.MembersReader(FakeGame(pages, expected=9))
     saved = {}
-    reader = F.MembersReader(first)
-    reader.on_progress = lambda result, done: saved.update(members=dict(result.members), done=set(done))
-    reader.run()
-    missing = rows[2]
+    first.on_progress = lambda result, done: saved.update(members=dict(result.members), done=set(done))
+    first.run()
+    # 先前少讀了第二頁的一位
+    missing = rows[7]
     saved["members"].pop(missing.uid)
     saved["done"] = {k for k in saved["done"] if k[0] != missing.name}
 
-    game = FakeGame([Page(TOPS, rows)], expected=6)
-    result = F.MembersReader(game, done_keys=saved["done"], known=saved["members"]).run_page()
+    game = FakeGame(pages, expected=9, page=1)  # 開始時停在哪一頁都可以
+    result = F.MembersReader(game, done_keys=saved["done"], known=saved["members"]).run()
     assert result.complete
     assert missing.uid in result.members
     assert len(game.clicks) == 3  # 只開了缺少那一位的個人視窗
-    assert game.drags == []  # 補讀不滑動
+    assert any(y2 < y1 for y1, y2 in game.drags)  # 有往下滑找
 
 
-def test_read_page_reports_how_many_are_still_missing():
+def test_failed_row_is_retried_when_resuming():
     rows = make_rows(6)
-    game = FakeGame([Page(TOPS, rows)], expected=8)
-    result = F.MembersReader(game).run_page()
-    assert not result.complete
-    assert "還少 2 人" in result.stop_reason
+    rows[2].uid_readable = False
+    saved = {}
+    first = F.MembersReader(FakeGame([Page(TOPS, rows)], expected=6))
+    first.on_progress = lambda result, done: saved.update(members=dict(result.members), done=set(done))
+    assert not first.run().complete
+
+    rows[2].uid_readable = True
+    game = FakeGame([Page(TOPS, rows)], expected=6)
+    result = F.MembersReader(game, done_keys=saved["done"], known=saved["members"]).run()
+    assert result.complete
+    assert rows[2].uid in result.members
 
 
 def test_expected_count_entered_by_admin_wins():

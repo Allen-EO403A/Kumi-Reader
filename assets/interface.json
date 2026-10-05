@@ -2,7 +2,7 @@
     "interface_version": 2,
     "name": "Kumi 讀取程式",
     "description": "讀取「忍者必須死3」的家族成員與深淵排行，上傳到 Kumi（SS+ 管理系統）。",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "welcome": "使用說明.md",
     "controller": [
         {
@@ -39,22 +39,28 @@
             "name": "讀取家族成員",
             "entry": "ReadMembers",
             "option": [
-                "ExpectedCount"
+                "ExpectedCount",
+                "DiscardLocal"
             ],
-            "description": "打開家族面板的「成員」分頁後執行。程式會先滑到名單最上面，逐一讀取每位成員；讀到底時核對人數。"
+            "description": "打開家族面板的「成員」分頁後執行。程式會先滑到名單最上面，逐一讀取每位成員，讀到底時核對人數。結果存在本機，要再執行「上傳讀取結果」。"
         },
         {
-            "name": "補讀目前畫面",
-            "entry": "ReadMembersPage",
+            "name": "補讀缺少的成員",
+            "entry": "ReadMissingMembers",
             "option": [
                 "ExpectedCount"
             ],
-            "description": "人數對不上時使用：把名單移到缺少成員所在的那一頁後執行，只讀這一頁還沒讀過的成員，並上傳到同一批次。"
+            "description": "人數對不上時使用：打開「成員」分頁後執行（停在哪一頁都可以）。程式會從最上面一路滑到底，只讀還沒讀過的成員。"
         },
         {
             "name": "讀取深淵排行",
             "entry": "ReadAbyss",
-            "description": "請在週五 21:00 深淵結束後、排行清空前執行。打開深淵排行榜的「家族狀況」分頁後執行；程式只滑動、不點擊。"
+            "description": "請在週五 21:00 深淵結束後、排行清空前執行。打開深淵排行榜的「家族狀況」分頁後執行；程式只滑動、不點擊。結果存在本機，要再執行「上傳讀取結果」。"
+        },
+        {
+            "name": "上傳讀取結果",
+            "entry": "Upload",
+            "description": "把本機還沒上傳的家族成員與深淵排行結果上傳到 Kumi。上傳失敗時結果會保留，稍後再執行即可，不用重新讀取。"
         }
     ],
     "option": {
@@ -77,12 +83,38 @@
                         "expectedCount": "{ExpectedCount}"
                     }
                 },
-                "ReadMembersPage": {
+                "ReadMissingMembers": {
                     "custom_action_param": {
                         "expectedCount": "{ExpectedCount}"
                     }
                 }
             }
+        },
+        "DiscardLocal": {
+            "type": "switch",
+            "label": "捨棄本機結果重新讀取",
+            "description": "本機還有沒上傳的家族成員結果時，讀取會停下來提醒。確定不要那份結果時才設為「是」。",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "label": "是",
+                    "pipeline_override": {
+                        "ReadMembers": {
+                            "custom_action": "ReadMembersDiscard"
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "label": "否",
+                    "pipeline_override": {
+                        "ReadMembers": {
+                            "custom_action": "ReadMembers"
+                        }
+                    }
+                }
+            ]
         },
         "ApiUrl": {
             "type": "input",

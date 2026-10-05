@@ -1,7 +1,7 @@
 """開發用：不經 MFAAvalonia，直接連雷電模擬器執行讀取任務。
 
-用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1] [--page | --abyss]
-預設「讀取家族成員」；--page 為「補讀目前畫面」；--abyss 為「讀取深淵排行」。
+用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1] [--missing | --abyss | --upload]
+預設「讀取家族成員」；--missing 為「補讀缺少的成員」；--abyss 為「讀取深淵排行」；--upload 為「上傳讀取結果」。
 不帶參數時列出所有模擬器並連第一台。
 需要：模擬器已開啟並停在家族「成員」分頁、`.env` 已填寫、已下載 OCR 模型。
 """
@@ -19,7 +19,8 @@ from maa.tasker import Tasker  # noqa: E402
 from maa.toolkit import Toolkit  # noqa: E402
 
 from abyss_runner import ReadAbyssAction  # noqa: E402  不載入 actions（AgentServer）
-from members_runner import ReadMembersAction, ReadMembersPageAction  # noqa: E402
+from members_runner import ReadMembersAction, ReadMissingMembersAction  # noqa: E402
+from upload_runner import UploadAction  # noqa: E402
 
 
 def main() -> int:
@@ -31,7 +32,6 @@ def main() -> int:
     for d in devices:
         print(f"找到模擬器：{d.name}（{d.address}）")
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    page_only = "--page" in sys.argv
     wanted = args[0] if args else None
     matches = [d for d in devices if not wanted or wanted in d.name or wanted in d.address]
     if not matches:
@@ -51,14 +51,16 @@ def main() -> int:
     res = Resource()
     res.post_bundle(str(ROOT / "assets" / "resource")).wait()
     res.register_custom_action("ReadMembers", ReadMembersAction())
-    res.register_custom_action("ReadMembersPage", ReadMembersPageAction())
+    res.register_custom_action("ReadMissingMembers", ReadMissingMembersAction())
+    res.register_custom_action("Upload", UploadAction())
     res.register_custom_action("ReadAbyss", ReadAbyssAction())
     tasker = Tasker()
     tasker.bind(res, ctrl)
     if not tasker.inited:
         print("MaaFramework 初始化失敗。")
         return 1
-    entry = "ReadAbyss" if "--abyss" in sys.argv else ("ReadMembersPage" if page_only else "ReadMembers")
+    flags = {"--missing": "ReadMissingMembers", "--abyss": "ReadAbyss", "--upload": "Upload"}
+    entry = next((e for f, e in flags.items() if f in sys.argv), "ReadMembers")
     detail = tasker.post_task(entry).wait().get()
     return 0 if detail and detail.status.succeeded else 1
 

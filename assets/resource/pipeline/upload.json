@@ -1,0 +1,7 @@
+{
+    "Upload": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "Upload"
+    }
+}

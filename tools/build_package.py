@@ -116,7 +116,7 @@ def verify() -> None:
     python = INSTALL / "python" / "python.exe"
     code = (
         "import sys; sys.path.insert(0, 'agent'); "
-        "import maa, requests, actions, members_runner, abyss_runner, key_setup; from importlib.metadata import version; "
+        "import maa, requests, actions, members_runner, abyss_runner, upload_runner, key_setup; from importlib.metadata import version; "
         "print('MaaFw', version('MaaFw'), 'Python', sys.version.split()[0])"
     )
     subprocess.run([str(python), "-c", code], cwd=INSTALL, check=True)
