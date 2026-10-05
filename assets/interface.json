@@ -2,7 +2,7 @@
     "interface_version": 2,
     "name": "Kumi 家族成員讀取程式",
     "description": "讀取「忍者必須死3」家族面板的成員暱稱、UID 與職位，上傳到 Kumi（SS+ 管理系統）。",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "controller": [
         {
             "name": "雷電模擬器（ADB）",
