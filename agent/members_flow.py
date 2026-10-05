@@ -106,6 +106,7 @@ class MembersReader:
         known: dict[str, dict] | None = None,
         on_progress=None,
         expected_override: int | None = None,
+        extra_passes: int = 2,
     ):
         self.d = device
         self.max_pages = max_pages
@@ -115,6 +116,7 @@ class MembersReader:
         self.on_progress = on_progress or (lambda result, done: None)
         self.last_image: np.ndarray | None = None  # 停止時的畫面（除錯用）
         self.expected_override = expected_override  # 管理員自行輸入的成員數
+        self.extra_passes = extra_passes  # 到底仍少人時，回到最上面再找的次數
 
     # -- 畫面確認 --
     def _on_list(self, image: np.ndarray) -> bool:
@@ -164,7 +166,10 @@ class MembersReader:
 
         done_rows: set[tuple] = set(self.done_keys)
         result.members.update(self.known)
-        for _page in range(self.max_pages):
+        passes_left = self.extra_passes
+        pages = 0
+        while pages < self.max_pages:
+            pages += 1
             page_keys = self._page_keys(image)
             for top, key in page_keys:
                 if key in done_rows:
@@ -193,6 +198,14 @@ class MembersReader:
                 # 已到底：人數相符才算讀完，否則提示缺幾人
                 missing = (result.expected or 0) - len(result.members)
                 result.complete = missing <= 0
+                if not result.complete and passes_left > 0:
+                    # 名單順序會隨上線狀態變動，讀取途中有人換位置就可能被跳過：
+                    # 回到最上面再找一次，只開還沒讀過的列
+                    passes_left -= 1
+                    log.info(f"已到名單底部，還少 {missing} 人。名單順序可能在讀取中變動，從最上面再找一次…")
+                    image = self._scroll_to_top(image)
+                    pages = 0
+                    continue
                 if not result.complete:
                     result.stop_reason = (
                         f"已到名單底部，但只讀到 {len(result.members)} / {result.expected} 人，少 {missing} 人。"

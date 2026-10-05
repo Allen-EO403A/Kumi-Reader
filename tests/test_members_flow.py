@@ -117,7 +117,7 @@ def test_unreadable_uid_is_counted_as_failed_row():
     rows[2].uid_readable = False
     game = FakeGame([Page(TOPS, rows)], expected=6)
     result = F.MembersReader(game).run()
-    assert result.failed_rows == 1
+    assert result.failed_rows == 3  # 第一次＋回到最上面再找的兩次都重試
     assert rows[2].uid not in result.members
     assert len(result.members) == 5
 
@@ -181,3 +181,35 @@ def test_expected_count_entered_by_admin_wins():
     result = F.MembersReader(game, expected_override=7).run()
     assert result.expected == 7
     assert not result.complete and "少 1 人" in result.stop_reason
+
+
+class ReorderingGame(FakeGame):
+    """第一次往下滑時，名單底部的人上線、移到最上面（已經讀過的區域）。"""
+
+    def drag(self, x, y1, y2):
+        if y2 < y1 and not getattr(self, "reordered", False):
+            self.reordered = True
+            rows = self.all_rows
+            self.pages = [
+                Page(TOPS, [rows[8]] + rows[0:5]),
+                Page([350, 463, 577, 690, 804], rows[3:8]),
+            ]
+        super().drag(x, y1, y2)
+
+
+def test_rescans_from_top_when_list_order_changes_while_reading():
+    rows = make_rows(9)
+    game = ReorderingGame([Page(TOPS, rows[0:6]), Page([350, 463, 577, 690, 804], rows[4:9])], expected=9)
+    game.all_rows = rows
+    result = F.MembersReader(game).run()
+    assert result.complete
+    assert sorted(result.members) == sorted(r.uid for r in rows)
+    assert len(game.clicks) == 9 * 3  # 每人只開一次個人視窗
+
+
+def test_gives_up_after_extra_passes():
+    rows = make_rows(6)
+    game = FakeGame([Page(TOPS, rows)], expected=8)
+    result = F.MembersReader(game, extra_passes=2).run()
+    assert not result.complete and "少 2 人" in result.stop_reason
+    assert len(game.clicks) == 6 * 3  # 再找時不重開已讀的人
