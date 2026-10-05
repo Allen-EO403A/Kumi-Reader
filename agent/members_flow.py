@@ -46,10 +46,12 @@ PROFILE_NAME_ROI: Roi = (1145, 222, 312, 66)
 PROFILE_ID_ROI: Roi = (1145, 296, 330, 46)
 
 # ---- 滑動 ----
-SWIPE_FROM = (1150, 950)
-SWIPE_TO = (1150, 420)
-SWIPE_MS = 900
-SETTLE_SECONDS = 1.0
+# 拖曳後停住再放開（沒有慣性）：拖 450 px 約移動 400 px ≈ 3.5 列，畫面 6 列，前後一定有重疊
+DRAG_X = 1150
+DRAG_FROM, DRAG_TO = 950, 500
+DRAG_BACK = 170  # 沒有重疊時往回拖的距離（約 1.5 列）
+TOP_FROM, TOP_TO = 420, 980  # 回到名單最上面
+SETTLE_SECONDS = 0.6
 LIST_REGION: Roi = (510, LIST_TOP, 1330, LIST_BOTTOM - LIST_TOP)
 
 
@@ -99,8 +101,8 @@ class MembersReader:
     def _on_list(self, image: np.ndarray) -> bool:
         return parse_member_count(self.d.ocr(image, MEMBER_COUNT_ROI)) is not None
 
-    def _wait(self, check, seconds: float = 0.6) -> np.ndarray | None:
-        for _ in range(self.retries + 2):
+    def _wait(self, check, seconds: float = 0.6, tries: int | None = None) -> np.ndarray | None:
+        for _ in range(tries or self.retries + 2):
             self.d.sleep(seconds)
             image = self.d.screencap()
             if check(image):
@@ -116,14 +118,12 @@ class MembersReader:
             result.stop_reason = "目前不在家族面板的「成員」分頁。請打開「成員」分頁後再執行。"
             return result
         result.expected = count[0]
+        image = self._scroll_to_top(image)
 
         done_rows: set[tuple] = set()
         for _page in range(self.max_pages):
-            for top in find_row_tops(image):
-                contribution = self.d.ocr(image, row_contribution_roi(top))
-                if parse_int(contribution) is None:
-                    continue  # 不是成員列（頭尾推出來的候選位置沒有內容）
-                key = (self.d.ocr(image, row_name_roi(top)), contribution)
+            page_keys = self._page_keys(image)
+            for top, key in page_keys:
                 if key in done_rows:
                     continue  # 滑動後重複出現的列
                 role = parse_role(self.d.ocr(image, row_role_roi(top)))
@@ -135,7 +135,8 @@ class MembersReader:
                     result.members.setdefault(member["uid"], member)
                     log.info(f"已讀 {len(result.members)} / {result.expected} 人：{member['name'] or '（讀不出暱稱）'}")
                 done_rows.add(key)
-                image = self._wait(self._on_list)
+                # 個人視窗關閉的動畫有時較久：最多等約 8 秒
+                image = self._wait(self._on_list, seconds=0.8, tries=10)
                 if image is None:
                     result.stop_reason = "關閉個人視窗後沒有回到成員列表，已停止。"
                     return result
@@ -144,14 +145,45 @@ class MembersReader:
                     return result
 
             before = image
-            self.d.swipe(*SWIPE_FROM, *SWIPE_TO, SWIPE_MS)
-            self.d.sleep(SETTLE_SECONDS)
-            image = self.d.screencap()
+            image = self._drag(DRAG_FROM, DRAG_TO)
             if not region_changed(before, image, LIST_REGION):
                 result.complete = True  # 滑動後畫面不變：已到底
                 return result
+            # 新畫面必須與上一頁有重疊的列，否則可能滑過頭漏讀：往回拖再確認
+            previous = {key for _, key in page_keys}
+            for _ in range(self.retries):
+                if previous & {key for _, key in self._page_keys(image)}:
+                    break
+                image = self._drag(DRAG_TO, DRAG_TO + DRAG_BACK)
+            else:
+                result.stop_reason = "滑動後找不到與上一頁重疊的列，為避免漏讀已停止。"
+                return result
         result.stop_reason = "讀取頁數超過上限，已停止。"
         return result
+
+    def _scroll_to_top(self, image: np.ndarray) -> np.ndarray:
+        """名單可能停在中間或底部：一直往上拖到畫面不再改變。"""
+        for _ in range(self.max_pages):
+            after = self._drag(TOP_FROM, TOP_TO)
+            if not region_changed(image, after, LIST_REGION):
+                return after
+            image = after
+        return image
+
+    def _drag(self, y1: int, y2: int) -> np.ndarray:
+        self.d.drag(DRAG_X, y1, y2)
+        self.d.sleep(SETTLE_SECONDS)
+        return self.d.screencap()
+
+    def _page_keys(self, image: np.ndarray) -> list[tuple[int, tuple[str, str]]]:
+        """畫面上每一列的（上緣 y,（暱稱原文, 貢獻度原文））；略過沒有內容的候選位置。"""
+        keys = []
+        for top in find_row_tops(image):
+            contribution = self.d.ocr(image, row_contribution_roi(top))
+            if parse_int(contribution) is None:
+                continue
+            keys.append((top, (self.d.ocr(image, row_name_roi(top)), contribution)))
+        return keys
 
     def _read_profile(self, top: int) -> dict | None:
         """點頭像 → 個人資訊 → 讀暱稱與 ID → 關閉。讀不出 UID 時回傳 None（這一列記為失敗）。"""

@@ -59,6 +59,33 @@ def test_reads_every_member_across_pages_without_duplicates():
     assert not set(game.clicks) & set(FORBIDDEN)
 
 
+def test_stops_instead_of_skipping_when_pages_do_not_overlap():
+    rows = make_rows(12)
+    # 第二頁與第一頁沒有重疊（滑過頭），往回拖也回不去
+    game = FakeGame([Page(TOPS, rows[0:6]), Page(TOPS, rows[8:12])], expected=12, drag_back_works=False)
+    result = F.MembersReader(game).run()
+    assert result.stop_reason and "漏讀" in result.stop_reason
+    assert sorted(result.members) == sorted(r.uid for r in rows[0:6])  # 不讀可能漏人的那一頁
+    assert any(y2 > y1 for y1, y2 in game.drags)  # 有試著往回拖
+
+
+def test_uses_drag_and_moves_less_than_a_page():
+    rows = make_rows(9)
+    game = FakeGame([Page(TOPS, rows[0:6]), Page([350, 463, 577, 690, 804], rows[4:9])], expected=9)
+    F.MembersReader(game).run()
+    y1, y2 = next((a, b) for a, b in game.drags if b < a)  # 第一次往下捲
+    assert 0 < y1 - y2 < 6 * F.ROW_HEIGHT  # 一次拖動少於一頁（6 列）
+
+
+def test_scrolls_to_top_before_reading():
+    rows = make_rows(9)
+    pages = [Page(TOPS, rows[0:6]), Page([350, 463, 577, 690, 804], rows[4:9])]
+    game = FakeGame(pages, expected=9, page=1)  # 開始時停在名單底部
+    result = F.MembersReader(game).run()
+    assert result.complete
+    assert sorted(result.members) == sorted(r.uid for r in rows)
+
+
 def test_stops_at_bottom_when_scrolling_changes_nothing():
     rows = make_rows(6)
     game = FakeGame([Page(TOPS, rows)], expected=8)  # 應讀 8 人，但名單只有 6 列

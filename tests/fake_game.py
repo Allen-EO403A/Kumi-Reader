@@ -32,10 +32,12 @@ class FakeGame:
     pages: list[Page]
     expected: int
     on_list_at_start: bool = True
+    drag_back_works: bool = True
     page: int = 0
     mode: str = "list"  # list / dress（搭配分頁）/ info（個人資訊分頁）
     current: Row | None = None
     clicks: list[tuple[int, int]] = field(default_factory=list)
+    drags: list[tuple[int, int]] = field(default_factory=list)
     snapshots: dict[int, tuple] = field(default_factory=dict)
 
     def screencap(self) -> np.ndarray:
@@ -88,7 +90,14 @@ class FakeGame:
             self.mode, self.current = "list", None
 
     def swipe(self, x1, y1, x2, y2, duration_ms) -> None:
-        self.page = min(self.page + 1, len(self.pages) - 1)
+        raise AssertionError("程式 A 應該用 drag（停住再放開），不用會有慣性的 swipe")
+
+    def drag(self, x, y1, y2) -> None:
+        self.drags.append((y1, y2))
+        if y2 < y1:
+            self.page = min(self.page + 1, len(self.pages) - 1)
+        elif self.drag_back_works:
+            self.page = max(self.page - 1, 0)
 
     def sleep(self, seconds: float) -> None:
         pass

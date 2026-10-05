@@ -17,6 +17,7 @@ class Device(Protocol):
     def screencap(self) -> np.ndarray: ...
     def click(self, x: int, y: int) -> None: ...
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int) -> None: ...
+    def drag(self, x: int, y1: int, y2: int) -> None: ...
     def ocr(self, image: np.ndarray, roi: Roi) -> str: ...
     def sleep(self, seconds: float) -> None: ...
 
@@ -47,6 +48,16 @@ class MaaDevice:
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int) -> None:
         self._controller.post_swipe(x1, y1, x2, y2, duration_ms).wait()
+
+    def drag(self, x: int, y1: int, y2: int, steps: int = 12, hold: float = 0.4) -> None:
+        """按下 → 分段移動 → 停住再放開。停住可以消掉慣性，每次移動的距離才會固定
+        （2026-10-05 實機：拖 340 px 實際移動 283～312 px，不會滑過頭）。"""
+        self._controller.post_touch_down(x, y1).wait()
+        for i in range(1, steps + 1):
+            self._controller.post_touch_move(x, round(y1 + (y2 - y1) * i / steps)).wait()
+            time.sleep(0.02)
+        time.sleep(hold)
+        self._controller.post_touch_up().wait()
 
     def ocr(self, image: np.ndarray, roi: Roi) -> str:
         # 只辨識、不偵測：固定區域內的文字（decisions.md 第 19 節）
