@@ -22,6 +22,7 @@ LIST_TOP, LIST_BOTTOM = 143, 876  # 表頭下緣～黃色列上緣
 # 不用暱稱右邊的空白：長暱稱會延伸進去（家族成員列表曾因此跳過整列，2026-10-05）。
 SEPARATOR_BANDS = ((1620, 1680), (1850, 1900))
 ROW_HEIGHT = 135
+TOP_ROW_SLACK = 12  # 第 1 名的上緣被表頭蓋住的容許量（實機約 8 px）
 FAMILY_TAB_PIXEL = (900, 50)  # 「家族狀況」分頁：選取時為淺色
 HEADER_ROI: Roi = (1380, 92, 120, 48)  # 欄位標題「傷害」
 
@@ -56,7 +57,7 @@ LIST_REGION: Roi = (780, LIST_TOP, 1120, LIST_BOTTOM - LIST_TOP)
 
 
 def find_row_tops(image: np.ndarray) -> list[int]:
-    """完整露出的列：回傳每列上緣分隔線的 y。分隔線為深色（約 RGB 19,28,46）。"""
+    """完整露出的列：回傳每列上緣的 y。分隔線為深色（約 RGB 19,28,46）。"""
     dark = np.ones(LIST_BOTTOM + 4 - LIST_TOP, dtype=bool)
     for x0, x1 in SEPARATOR_BANDS:
         dark &= image[LIST_TOP:LIST_BOTTOM + 4, x0:x1].astype(float).mean(axis=(1, 2)) < 80
@@ -66,7 +67,12 @@ def find_row_tops(image: np.ndarray) -> list[int]:
             y = LIST_TOP + offset
             if not lines or y - lines[-1] > 20:
                 lines.append(y)
-    return [a for a, b in zip(lines, lines[1:]) if 110 <= b - a <= 160]
+    tops = [a for a, b in zip(lines, lines[1:]) if 110 <= b - a <= 160]
+    # 名單在最上面時，第 1 名上方是表頭、沒有深色分隔線：從第一條分隔線往上推一列
+    # （2026-10-05 實機：沒有這一步時第 1 名整列被跳過）
+    if lines and lines[0] - ROW_HEIGHT >= LIST_TOP - TOP_ROW_SLACK:
+        tops.insert(0, lines[0] - ROW_HEIGHT)
+    return tops
 
 
 def on_family_tab(image: np.ndarray, header_text: str) -> bool:

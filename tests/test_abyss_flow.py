@@ -110,3 +110,21 @@ def test_stops_when_a_gap_in_ranks_cannot_be_closed():
     assert not result.complete
     assert "缺號" in result.stop_reason
     assert [r.rank for r in result.rows] == list(range(1, len(result.rows) + 1))
+
+
+def test_first_row_under_the_header_is_found_at_top_of_list():
+    # 名單在最上面：第 1 名上方是表頭，沒有深色分隔線
+    image = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    image[:, :] = (219, 193, 205)
+    for y in [270, 405, 540, 675, 810]:
+        image[y : y + 4, :] = (46, 28, 19)
+    assert F.find_row_tops(image)[:2] == [135, 270]
+
+
+TOP_SAMPLE = Path(__file__).resolve().parents[1] / "samples" / "abyss-top.png"
+
+
+@pytest.mark.skipif(not TOP_SAMPLE.exists(), reason="需要 samples/abyss-top.png（實機截圖，不提交）")
+def test_real_screenshot_top_of_list_includes_first_place():
+    image = np.array(Image.open(TOP_SAMPLE).convert("RGB"))[:, :, ::-1].copy()
+    assert F.find_row_tops(image) == [135, 270, 405, 540, 675]
