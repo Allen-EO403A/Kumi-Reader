@@ -46,7 +46,7 @@ class FakeAbyss:
         for top in TOPS + [TOPS[-1] + F.ROW_HEIGHT]:
             image[top : top + 4, :] = LINE
         # 不同位置的內容不同（避開找分隔線的空白欄）
-        image[F.LIST_TOP : F.LIST_BOTTOM, 1400:1800] = (30 + self.offset * 29) % 256
+        image[F.LIST_TOP : F.LIST_BOTTOM, 1200:1600] = (30 + self.offset * 29) % 256
         self.snapshots[id(image)] = self.offset
         return image
 

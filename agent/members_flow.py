@@ -19,7 +19,10 @@ from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_ro
 # ---- 成員列表 ----
 MEMBER_COUNT_ROI: Roi = (130, 762, 240, 52)  # 「成員：99/100」
 LIST_TOP, LIST_BOTTOM = 287, 1009  # 列表可視範圍（表頭下緣～面板下緣）
-SEPARATOR_X = (1000, 1150)  # 用來找分隔線的空白欄
+# 用來找分隔線的空白欄：角色圖示與「最近上線」之間、面板右緣。兩欄都要符合才算分隔線。
+# 不用暱稱右邊的空白：長暱稱（例如「墨染星夜離幽夢 (夜空)」）會延伸到 x≈1040，
+# 文字邊緣的顏色被誤認成分隔線，整列被切壞而跳過（2026-10-05 實機）。
+SEPARATOR_BANDS = ((1590, 1630), (1790, 1835))
 ROW_HEIGHT = 113
 
 
@@ -67,9 +70,10 @@ def find_row_tops(image: np.ndarray) -> list[int]:
     名單在最上面時第一列上方沒有分隔線、在最下面時最後一列下方可能沒有，
     所以頭尾各多推一列當候選；呼叫端要再確認該列有內容（貢獻度讀得到數字）。
     """
-    x0, x1 = SEPARATOR_X
-    band = image[LIST_TOP:LIST_BOTTOM, x0:x1].astype(float).mean(axis=1)[:, ::-1]  # BGR → RGB
-    near = np.abs(band - np.array(SEPARATOR_RGB)).max(axis=1) <= SEPARATOR_TOLERANCE
+    near = np.ones(LIST_BOTTOM - LIST_TOP, dtype=bool)
+    for x0, x1 in SEPARATOR_BANDS:
+        band = image[LIST_TOP:LIST_BOTTOM, x0:x1].astype(float).mean(axis=1)[:, ::-1]  # BGR → RGB
+        near &= np.abs(band - np.array(SEPARATOR_RGB)).max(axis=1) <= SEPARATOR_TOLERANCE
     lines: list[int] = []
     for offset in np.flatnonzero(near):
         y = LIST_TOP + int(offset)

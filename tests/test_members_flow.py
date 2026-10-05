@@ -36,6 +36,13 @@ def test_find_row_tops_handles_top_of_list_and_highlighted_row():
     assert F.find_row_tops(image) == [286, 399, 513, 626, 740, 853]
 
 
+def test_long_name_reaching_into_blank_column_is_not_a_separator():
+    # 長暱稱的文字延伸到暱稱右邊的空白欄：只要分隔線欄位乾淨，就不會多出假分隔線
+    image = synthetic([399, 513, 626, 740, 853, 966])
+    image[420:450, 690:1045] = (170, 199, 203)  # 文字邊緣的顏色剛好接近分隔線
+    assert F.find_row_tops(image) == [286, 399, 513, 626, 740, 853]
+
+
 @pytest.mark.skipif(not SAMPLE.exists(), reason="需要 samples/member-list.png（實機截圖，不提交）")
 def test_find_row_tops_on_real_screenshot():
     rgb = np.array(Image.open(SAMPLE).convert("RGB"))

@@ -50,7 +50,7 @@ class FakeGame:
                 image[top : top + 2, :] = LINE
             # 每一頁的內容不同（讓「滑動後畫面是否改變」可以判斷）
             # 實機滑動時整個列表都會變；用大塊區域模擬（避開找分隔線的空白欄）
-            image[F.LIST_TOP : F.LIST_BOTTOM, 1200:1800] = (60 + self.page * 37) % 256
+            image[F.LIST_TOP : F.LIST_BOTTOM, 1200:1500] = (60 + self.page * 37) % 256
         self.snapshots[id(image)] = (mode, self.page, self.current)
         return image
 

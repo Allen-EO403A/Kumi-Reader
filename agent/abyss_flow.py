@@ -15,7 +15,9 @@ from kumi_reader.device import Device, Roi, StopRequested, region_changed
 from kumi_reader.text import parse_int, parse_name, parse_role
 
 LIST_TOP, LIST_BOTTOM = 143, 876  # 表頭下緣～黃色列上緣
-SEPARATOR_X = (1180, 1330)  # 暱稱與傷害之間的空白欄
+# 用來找分隔線的空白欄：傷害與挑戰次數之間、面板右緣，兩欄都要是深色才算分隔線。
+# 不用暱稱右邊的空白：長暱稱會延伸進去（家族成員列表曾因此跳過整列，2026-10-05）。
+SEPARATOR_BANDS = ((1620, 1680), (1850, 1900))
 ROW_HEIGHT = 135
 FAMILY_TAB_PIXEL = (900, 50)  # 「家族狀況」分頁：選取時為淺色
 HEADER_ROI: Roi = (1380, 92, 120, 48)  # 欄位標題「傷害」
@@ -48,11 +50,12 @@ LIST_REGION: Roi = (780, LIST_TOP, 1120, LIST_BOTTOM - LIST_TOP)
 
 def find_row_tops(image: np.ndarray) -> list[int]:
     """完整露出的列：回傳每列上緣分隔線的 y。分隔線為深色（約 RGB 19,28,46）。"""
-    x0, x1 = SEPARATOR_X
-    brightness = image[LIST_TOP:LIST_BOTTOM + 4, x0:x1].astype(float).mean(axis=(1, 2))
+    dark = np.ones(LIST_BOTTOM + 4 - LIST_TOP, dtype=bool)
+    for x0, x1 in SEPARATOR_BANDS:
+        dark &= image[LIST_TOP:LIST_BOTTOM + 4, x0:x1].astype(float).mean(axis=(1, 2)) < 80
     lines: list[int] = []
-    for offset, value in enumerate(brightness):
-        if value < 80:
+    for offset, is_dark in enumerate(dark):
+        if is_dark:
             y = LIST_TOP + offset
             if not lines or y - lines[-1] > 20:
                 lines.append(y)
