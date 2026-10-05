@@ -7,6 +7,7 @@ import local_results as store
 from abyss_runner import read_abyss
 from fake_abyss import FakeAbyss, make_entries
 from fake_game import FakeGame, Page, make_rows
+from kumi_reader.device import StopRequested
 from members_runner import read_members
 from upload_runner import upload_all
 
@@ -120,3 +121,48 @@ def test_abyss_period_starts_friday_20():
     assert store.abyss_period_start(datetime(2026, 10, 9, 11, 59, tzinfo=timezone.utc)) == "2026-10-02"  # 10/9 19:59
     assert store.abyss_period_start(datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)) == "2026-10-09"  # 10/9 20:00
     assert store.abyss_period_start(datetime(2026, 10, 4, 18, 0, tzinfo=timezone.utc)) == "2026-10-02"  # 10/5 02:00
+
+
+class StoppingGame(FakeGame):
+    """第 n 次點擊時模擬使用者按下停止。"""
+
+    def __init__(self, *args, stop_after: int, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stop_after = stop_after
+
+    def click(self, x, y):
+        if len(self.clicks) >= self.stop_after:
+            raise StopRequested()
+        super().click(x, y)
+
+
+def test_stop_keeps_members_read_so_far(tmp_path, capsys):
+    data = tmp_path / "data"
+    rows = make_rows(6)
+    game = StoppingGame([Page(TOPS, rows)], expected=6, stop_after=7)  # 讀完 2 人後停止
+    assert not read_members(game, data, None, resume=False)
+    assert len(game.clicks) == 7
+    saved = store.load_members(data)
+    assert len(saved["members"]) == 2 and saved["pending"] and not saved["complete"]
+    assert "已依要求停止" in capsys.readouterr().out
+    # 補讀接著讀剩下的人
+    assert read_members(FakeGame([Page(TOPS, rows)], expected=6), data, None, resume=True)
+    assert store.load_members(data)["complete"]
+
+
+class StoppingAbyss(FakeAbyss):
+    def drag(self, x, y1, y2):
+        if self.drags_done >= 2:
+            raise StopRequested()
+        self.drags_done += 1
+        super().drag(x, y1, y2)
+
+
+def test_stop_during_abyss_saves_rows_read_so_far(tmp_path, capsys):
+    game = StoppingAbyss(make_entries(20))
+    game.drags_done = 0
+    assert not read_abyss(game, tmp_path, now=datetime(2026, 10, 3, 4, 0, tzinfo=timezone.utc))
+    saved = store.load_abyss(tmp_path)
+    assert saved["body"]["status"] == "incomplete"
+    assert 0 < len(saved["body"]["rows"]) < 20
+    assert "已依要求停止" in capsys.readouterr().out

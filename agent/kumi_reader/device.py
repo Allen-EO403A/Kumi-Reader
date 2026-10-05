@@ -13,6 +13,10 @@ import numpy as np
 Roi = tuple[int, int, int, int]  # x, y, w, h
 
 
+class StopRequested(Exception):
+    """使用者在 MFAAvalonia 按了停止：每個操作前檢查，讀取流程收到後停下並保留已讀部分。"""
+
+
 class Device(Protocol):
     def screencap(self) -> np.ndarray: ...
     def click(self, x: int, y: int) -> None: ...
@@ -40,18 +44,29 @@ class MaaDevice:
         self._JOCR = JOCR
         self._OCR = JRecognitionType.OCR
 
+    def _check_stop(self) -> None:
+        if self._context.tasker.stopping:
+            raise StopRequested()
+
     def screencap(self) -> np.ndarray:
-        return self._controller.post_screencap().wait().get()
+        self._check_stop()
+        image = self._controller.post_screencap().wait().get()
+        if image is None:
+            self._check_stop()  # 停止中截圖會失敗
+        return image
 
     def click(self, x: int, y: int) -> None:
+        self._check_stop()
         self._controller.post_click(x, y).wait()
 
     def swipe(self, x1: int, y1: int, x2: int, y2: int, duration_ms: int) -> None:
+        self._check_stop()
         self._controller.post_swipe(x1, y1, x2, y2, duration_ms).wait()
 
     def drag(self, x: int, y1: int, y2: int, steps: int = 12, hold: float = 0.4) -> None:
         """按下 → 分段移動 → 停住再放開。停住可以消掉慣性，每次移動的距離才會固定
         （2026-10-05 實機：拖 340 px 實際移動 283～312 px，不會滑過頭）。"""
+        self._check_stop()
         self._controller.post_touch_down(x, y1).wait()
         for i in range(1, steps + 1):
             self._controller.post_touch_move(x, round(y1 + (y2 - y1) * i / steps)).wait()
@@ -61,6 +76,7 @@ class MaaDevice:
 
     def ocr(self, image: np.ndarray, roi: Roi) -> str:
         # 只辨識、不偵測：固定區域內的文字（decisions.md 第 19 節）
+        self._check_stop()
         param = self._JOCR(roi=list(roi), only_rec=True, threshold=0.0)
         detail = self._context.run_recognition_direct(self._OCR, param, image)
         if not detail:
@@ -68,4 +84,8 @@ class MaaDevice:
         return "".join(r.text for r in detail.all_results)
 
     def sleep(self, seconds: float) -> None:
-        time.sleep(seconds)
+        # 分段等待，按下停止後最多 0.1 秒就會反應
+        end = time.monotonic() + seconds
+        while (left := end - time.monotonic()) > 0:
+            self._check_stop()
+            time.sleep(min(0.1, left))

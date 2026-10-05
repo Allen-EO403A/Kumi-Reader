@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from kumi_reader.device import Device, Roi, region_changed
+from kumi_reader.device import Device, Roi, StopRequested, region_changed
 from kumi_reader.text import parse_int, parse_name, parse_role
 
 LIST_TOP, LIST_BOTTOM = 143, 876  # 表頭下緣～黃色列上緣
@@ -79,6 +79,7 @@ class AbyssResult:
     rows: list[AbyssRow] = field(default_factory=list)
     complete: bool = False
     stop_reason: str | None = None
+    stopped: bool = False  # 使用者按了停止
 
 
 class AbyssReader:
@@ -156,6 +157,15 @@ class AbyssReader:
 
     def run(self) -> AbyssResult:
         result = AbyssResult()
+        try:
+            return self._run(result)
+        except StopRequested:
+            result.complete = False
+            result.stopped = True
+            result.stop_reason = "已依要求停止。"
+            return result
+
+    def _run(self, result: AbyssResult) -> AbyssResult:
         image = self.d.screencap()
         if not on_family_tab(image, self.d.ocr(image, HEADER_ROI)):
             result.stop_reason = "目前不在深淵排行的「家族狀況」分頁。請打開「家族狀況」分頁後再執行。"

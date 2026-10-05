@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from kumi_reader import log
-from kumi_reader.device import Device, Roi, region_changed
+from kumi_reader.device import Device, Roi, StopRequested, region_changed
 from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_role, parse_uid
 
 # ---- 成員列表 ----
@@ -90,6 +90,7 @@ class MembersResult:
     failed_rows: int = 0
     complete: bool = False
     stop_reason: str | None = None
+    stopped: bool = False  # 使用者按了停止
 
 
 class MembersReader:
@@ -144,6 +145,15 @@ class MembersReader:
     # -- 主流程 --
     def run(self) -> MembersResult:
         result = MembersResult()
+        try:
+            return self._run(result)
+        except StopRequested:
+            result.complete = False
+            result.stopped = True
+            result.stop_reason = "已依要求停止。"
+            return result
+
+    def _run(self, result: MembersResult) -> MembersResult:
         image = self.d.screencap()
         count = parse_member_count(self.d.ocr(image, MEMBER_COUNT_ROI))
         if count is None:

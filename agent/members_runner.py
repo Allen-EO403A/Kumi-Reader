@@ -83,6 +83,18 @@ def read_members(device: Device, data_dir: Path, expected: int | None, resume: b
         expected_override=expected,
     )
     result = reader.run()
+    if result.stopped:
+        if result.members:
+            progress.update(members=result.members, expected=result.expected, complete=False)
+            progress["pending"] = progress["pending"] or len(result.members) != before
+            store.save_members(data_dir, progress)
+            log.warn(
+                f"已依要求停止。目前讀到 {len(result.members)} 人，已存在本機；"
+                "之後可以執行「補讀缺少的成員」接著讀，或直接「上傳讀取結果」。"
+            )
+        else:
+            log.warn("已依要求停止。")
+        return False
     if result.stop_reason and result.expected is None:
         save_debug_image(data_dir, reader.last_image)
         log.error(result.stop_reason)

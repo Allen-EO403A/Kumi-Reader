@@ -24,6 +24,9 @@ def read_abyss(device: Device, data_dir: Path, now: datetime | None = None) -> b
         log.warn(f"本機有一份還沒上傳的深淵排行（{len(previous['body']['rows'])} 名），這次的結果會取代它。")
     log.info("開始讀取深淵排行…")
     result = AbyssReader(device).run()
+    if result.stopped and not result.rows:
+        log.warn("已依要求停止。")
+        return False
     if result.stop_reason and not result.rows:
         log.error(result.stop_reason)
         return False
@@ -34,7 +37,7 @@ def read_abyss(device: Device, data_dir: Path, now: datetime | None = None) -> b
         log.success(f"讀到 {len(result.rows)} 名，已讀完。請執行「上傳讀取結果」。")
     else:
         log.warn(f"讀到 {len(result.rows)} 名，沒有讀完。可以再讀一次，或直接「上傳讀取結果」（之後再讀會接續同一批次）。")
-    return True
+    return not result.stopped
 
 
 class ReadAbyssAction(CustomAction):
