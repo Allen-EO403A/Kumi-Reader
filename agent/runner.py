@@ -48,38 +48,67 @@ def save_debug_image(data_dir: Path, image: np.ndarray | None) -> None:
     log.info(f"停止時的畫面已存到 {path}")
 
 
+def parse_expected(argv: CustomAction.RunArg) -> int | None:
+    """MFAAvalonia 任務選項「家族成員數」：空白表示用畫面上的數字。"""
+    try:
+        value = str(json.loads(argv.custom_action_param or "{}").get("expectedCount", "")).strip()
+    except (ValueError, AttributeError):
+        return None
+    return int(value) if value.isdigit() and int(value) > 0 else None
+
+
+def read_and_upload(context: Context, argv: CustomAction.RunArg, page_only: bool) -> bool:
+    session = start_session("members")
+    if session is None:
+        return False
+    progress = load_progress(session.data_dir)
+    if page_only and not progress["members"]:
+        log.warn("沒有接續中的批次。補讀會建立新的批次；平常請先執行「讀取家族成員」。")
+    elif progress["members"]:
+        log.info(f"接續上次的進度：已讀 {len(progress['members'])} 人，這次只讀還沒讀過的。")
+    log.info("開始補讀目前畫面…" if page_only else "開始讀取家族成員…")
+
+    def on_progress(result: MembersResult, done: set) -> None:
+        progress["members"] = result.members
+        progress["doneKeys"] = [list(k) for k in done]
+        save_progress(session.data_dir, progress)
+
+    reader = MembersReader(
+        MaaDevice(context),
+        done_keys={tuple(k) for k in progress["doneKeys"]},
+        known=progress["members"],
+        on_progress=on_progress,
+        expected_override=parse_expected(argv),
+    )
+    result = reader.run_page() if page_only else reader.run()
+    if result.stop_reason and result.expected is None:
+        save_debug_image(session.data_dir, reader.last_image)
+        log.error(result.stop_reason)
+        return False
+    if result.stop_reason:
+        if not result.complete and "少" not in result.stop_reason:
+            save_debug_image(session.data_dir, reader.last_image)
+        log.warn(result.stop_reason)
+    if not result.members:
+        return False
+    ok = upload(session, result, progress)
+    if ok and not result.complete:
+        log.warn("請把名單移到缺少成員所在的那一頁，執行「補讀目前畫面」。")
+    return ok
+
+
 class ReadMembersAction(CustomAction):
     """讀取家族成員並上傳。"""
 
     def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
-        session = start_session("members")
-        if session is None:
-            return False
-        progress = load_progress(session.data_dir)
-        if progress["members"]:
-            log.info(f"接續上次的進度：已讀 {len(progress['members'])} 人，這次只讀還沒讀過的。")
-        log.info("開始讀取家族成員…")
+        return read_and_upload(context, argv, page_only=False)
 
-        def on_progress(result: MembersResult, done: set) -> None:
-            progress["members"] = result.members
-            progress["doneKeys"] = [list(k) for k in done]
-            save_progress(session.data_dir, progress)
 
-        reader = MembersReader(
-            MaaDevice(context),
-            done_keys={tuple(k) for k in progress["doneKeys"]},
-            known=progress["members"],
-            on_progress=on_progress,
-        )
-        result = reader.run()
-        if result.stop_reason:
-            save_debug_image(session.data_dir, reader.last_image)
-        if result.stop_reason and not result.members:
-            log.error(result.stop_reason)
-            return False
-        if result.stop_reason:
-            log.warn(result.stop_reason)
-        return upload(session, result, progress)
+class ReadMembersPageAction(CustomAction):
+    """補讀目前畫面並上傳到同一批次。"""
+
+    def run(self, context: Context, argv: CustomAction.RunArg) -> bool:
+        return read_and_upload(context, argv, page_only=True)
 
 
 def upload(session: Session, result: MembersResult, progress: dict) -> bool:

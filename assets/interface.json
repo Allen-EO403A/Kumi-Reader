@@ -13,18 +13,62 @@
     "resource": [
         {
             "name": "預設",
-            "path": ["./resource"]
+            "path": [
+                "./resource"
+            ]
         }
     ],
     "agent": {
         "child_exec": "./python/python.exe",
-        "child_args": ["-u", "./agent/main.py"]
+        "child_args": [
+            "-u",
+            "./agent/main.py"
+        ]
     },
     "task": [
         {
             "name": "讀取家族成員",
             "entry": "ReadMembers",
-            "description": "開始前請關閉模擬器的按鍵提示，並打開家族面板的「成員」分頁。"
+            "option": [
+                "ExpectedCount"
+            ],
+            "description": "打開家族面板的「成員」分頁後執行。程式會先滑到名單最上面，逐一讀取每位成員；讀到底時核對人數。"
+        },
+        {
+            "name": "補讀目前畫面",
+            "entry": "ReadMembersPage",
+            "option": [
+                "ExpectedCount"
+            ],
+            "description": "人數對不上時使用：把名單移到缺少成員所在的那一頁後執行，只讀這一頁還沒讀過的成員，並上傳到同一批次。"
         }
-    ]
+    ],
+    "option": {
+        "ExpectedCount": {
+            "type": "input",
+            "label": "家族成員數（選填）",
+            "description": "留空時讀取畫面上的「成員：N/100」。有填寫時以這個數字核對，與畫面上的數字不同會提醒。",
+            "inputs": [
+                {
+                    "name": "ExpectedCount",
+                    "label": "成員數",
+                    "default": "",
+                    "pipeline_type": "string",
+                    "verify": "^\\d*$"
+                }
+            ],
+            "pipeline_override": {
+                "ReadMembers": {
+                    "custom_action_param": {
+                        "expectedCount": "{ExpectedCount}"
+                    }
+                },
+                "ReadMembersPage": {
+                    "custom_action_param": {
+                        "expectedCount": "{ExpectedCount}"
+                    }
+                }
+            }
+        }
+    }
 }

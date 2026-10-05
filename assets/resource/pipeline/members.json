@@ -1,9 +1,14 @@
 {
     "ReadMembers": {
-        "recognition": { "type": "DirectHit" },
-        "action": {
-            "type": "Custom",
-            "param": { "custom_action": "ReadMembers" }
-        }
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "ReadMembers",
+        "custom_action_param": { "expectedCount": "" }
+    },
+    "ReadMembersPage": {
+        "recognition": "DirectHit",
+        "action": "Custom",
+        "custom_action": "ReadMembersPage",
+        "custom_action_param": { "expectedCount": "" }
     }
 }

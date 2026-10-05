@@ -103,6 +103,7 @@ class MembersReader:
         done_keys: set[tuple[str, str]] | None = None,
         known: dict[str, dict] | None = None,
         on_progress=None,
+        expected_override: int | None = None,
     ):
         self.d = device
         self.max_pages = max_pages
@@ -111,6 +112,7 @@ class MembersReader:
         self.known = dict(known or {})
         self.on_progress = on_progress or (lambda result, done: None)
         self.last_image: np.ndarray | None = None  # 停止時的畫面（除錯用）
+        self.expected_override = expected_override  # 管理員自行輸入的成員數
 
     # -- 畫面確認 --
     def _on_list(self, image: np.ndarray) -> bool:
@@ -146,7 +148,7 @@ class MembersReader:
         if count is None:
             result.stop_reason = "目前不在家族面板的「成員」分頁。請打開「成員」分頁後再執行。"
             return result
-        result.expected = count[0]
+        result.expected = self._expected(count[0])
         image = self._scroll_to_top(image)
 
         done_rows: set[tuple] = set(self.done_keys)
@@ -195,6 +197,53 @@ class MembersReader:
                 result.stop_reason = "滑動後找不到與上一頁重疊的列，為避免漏讀已停止。"
                 return result
         result.stop_reason = "讀取頁數超過上限，已停止。"
+        return result
+
+    def _expected(self, on_screen: int) -> int:
+        """應讀人數：有輸入就用輸入值（與畫面上的數字不同時提醒），否則用畫面上的「成員：N/100」。"""
+        if self.expected_override is None:
+            return on_screen
+        if self.expected_override != on_screen:
+            log.warn(f"輸入的成員數 {self.expected_override} 與畫面上的 {on_screen} 不同，以輸入的數字核對。")
+        return self.expected_override
+
+    def run_page(self) -> MembersResult:
+        """補讀目前畫面：不滑動，只讀這一頁還沒讀過的列（decisions.md 第 19 節）。"""
+        result = MembersResult()
+        image = self.d.screencap()
+        count = parse_member_count(self.d.ocr(image, MEMBER_COUNT_ROI))
+        if count is None:
+            result.stop_reason = "目前不在家族面板的「成員」分頁。請把畫面移到缺少成員所在的那一頁後再執行。"
+            return result
+        result.expected = self._expected(count[0])
+        result.members.update(self.known)
+        done_rows: set[tuple] = set(self.done_keys)
+        new = 0
+        for top, key in self._page_keys(image):
+            if key in done_rows:
+                continue
+            role = parse_role(self.d.ocr(image, row_role_roi(top)))
+            member = self._read_profile(top)
+            if member is None:
+                result.failed_rows += 1
+            else:
+                member["role"] = role
+                if member["uid"] not in result.members:
+                    new += 1
+                    log.info(f"補讀：{member['name'] or '（讀不出暱稱）'}（貢獻度 {key[1]}）")
+                result.members[member["uid"]] = member
+            done_rows.add(key)
+            self.on_progress(result, done_rows)
+            image = self._back_to_list()
+            if image is None:
+                result.stop_reason = "關閉個人視窗後沒有回到成員列表，已停止。"
+                return result
+        if new == 0:
+            log.warn("這一頁的成員都已經讀過了。請把畫面移到缺少的成員所在的那一頁。")
+        missing = result.expected - len(result.members)
+        result.complete = missing <= 0
+        if not result.complete:
+            result.stop_reason = f"目前讀到 {len(result.members)} / {result.expected} 人，還少 {missing} 人。"
         return result
 
     def _scroll_to_top(self, image: np.ndarray) -> np.ndarray:

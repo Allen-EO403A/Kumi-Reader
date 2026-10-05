@@ -138,3 +138,39 @@ def test_build_upload_resumes_incomplete_batch():
         "members": [{"uid": "200000000000", "name": None, "role": None}],
         "batchId": 7,
     }
+
+
+def test_read_page_only_reads_members_not_read_yet():
+    rows = make_rows(6)
+    # 先前讀到 5 人，少了第 3 位（例如被滑過）
+    first = FakeGame([Page(TOPS, rows)], expected=6)
+    saved = {}
+    reader = F.MembersReader(first)
+    reader.on_progress = lambda result, done: saved.update(members=dict(result.members), done=set(done))
+    reader.run()
+    missing = rows[2]
+    saved["members"].pop(missing.uid)
+    saved["done"] = {k for k in saved["done"] if k[0] != missing.name}
+
+    game = FakeGame([Page(TOPS, rows)], expected=6)
+    result = F.MembersReader(game, done_keys=saved["done"], known=saved["members"]).run_page()
+    assert result.complete
+    assert missing.uid in result.members
+    assert len(game.clicks) == 3  # 只開了缺少那一位的個人視窗
+    assert game.drags == []  # 補讀不滑動
+
+
+def test_read_page_reports_how_many_are_still_missing():
+    rows = make_rows(6)
+    game = FakeGame([Page(TOPS, rows)], expected=8)
+    result = F.MembersReader(game).run_page()
+    assert not result.complete
+    assert "還少 2 人" in result.stop_reason
+
+
+def test_expected_count_entered_by_admin_wins():
+    rows = make_rows(6)
+    game = FakeGame([Page(TOPS, rows)], expected=6)  # 畫面上是 6
+    result = F.MembersReader(game, expected_override=7).run()
+    assert result.expected == 7
+    assert not result.complete and "少 1 人" in result.stop_reason
