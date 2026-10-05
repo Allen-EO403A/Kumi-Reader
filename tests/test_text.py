@@ -45,3 +45,11 @@ def test_parse_name_and_clean():
     assert parse_name("​") is None
     assert clean("ｂｏｔ＿Ａｎ９ｕＳ") == "bot_An9uS"
     assert clean("海・闇梟♪") == "海・闇梟♪"  # 不改動中日文與符號
+
+
+def test_parse_name_drops_remarks_in_brackets():
+    # 實機（A1）列表上出現的備註
+    assert parse_name("凌汐雪(小戌時)") == "凌汐雪"
+    assert parse_name("濕喊寶貝 (霸道總毛)") == "濕喊寶貝"
+    assert parse_name("染星夜離幽夢（夜空") == "染星夜離幽夢"  # 括號被截斷
+    assert parse_name("(只有備註)") == "(只有備註)"  # 括號在最前面時不當成備註

@@ -52,7 +52,20 @@ def parse_role(text: str) -> str | None:
     return None
 
 
+def strip_remark(text: str) -> str:
+    """去掉括號開始的備註：「凌汐雪(小戌時)」→「凌汐雪」。
+
+    備註是執行帳號自己替別人設定的，每個帳號都不同，只取括號前面的暱稱（2026-10-05 使用者決定）。
+    半形與全形括號都算；括號沒有收尾（被截斷）也一樣去掉。
+    """
+    for mark in ("(", "（"):
+        index = text.find(mark)
+        if index > 0:
+            text = text[:index]
+    return text.strip()
+
+
 def parse_name(text: str) -> str | None:
-    """暱稱：清理後非空就採用；讀不出來時為 None，由後端標為需手動命名。"""
-    value = clean(text)
+    """暱稱：清理並去掉括號備註後非空就採用；讀不出來時為 None，由後端標為需手動命名。"""
+    value = strip_remark(clean(text))
     return value or None
