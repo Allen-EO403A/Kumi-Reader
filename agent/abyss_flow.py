@@ -1,12 +1,15 @@
 """程式 B：讀取深淵排行「家族狀況」分頁（reader.md、decisions.md 第 18、19 節）。
 
-不點擊任何東西：先滑到最上面，然後逐頁讀取完整露出的每一列（暱稱、職位、傷害、挑戰次數），
-往上滑，滑動後畫面不變代表到底。名次用名單中的順序（不讀金銀銅藝術字）；
-底部固定的黃色列是執行帳號自己，不在可視範圍內。滑動後重複出現的列以「傷害＋挑戰次數」的順序對齊後略過。
+不點擊任何東西：先滑到最上面，然後逐頁讀取完整露出的每一列（名次、暱稱、職位、傷害、挑戰次數），
+往上滑，滑動後畫面不變代表到底。名次以每列左側的名次數字為準（2026-10-05 起），
+前後頁以名次合併；新的一頁和已讀名次之間有缺號時往回拖重讀，避免漏掉。
+讀不出名次的列（例如前三名的金銀銅圖示）依同一頁其他列的名次推算；整頁都讀不出時，
+以「傷害＋挑戰次數」與已讀名單對齊。底部固定的黃色列是執行帳號自己，不在可視範圍內。
 座標為 1920×1080 原始解析度，取自 2026-10-03 實機截圖。
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -21,6 +24,10 @@ SEPARATOR_BANDS = ((1620, 1680), (1850, 1900))
 ROW_HEIGHT = 135
 FAMILY_TAB_PIXEL = (900, 50)  # 「家族狀況」分頁：選取時為淺色
 HEADER_ROI: Roi = (1380, 92, 120, 48)  # 欄位標題「傷害」
+
+
+def row_rank_roi(top: int) -> Roi:
+    return (785, top + 35, 95, 70)
 
 
 def row_name_roi(top: int) -> Roi:
@@ -78,6 +85,17 @@ class AbyssRow:
 
 
 @dataclass
+class PageRow:
+    """畫面上讀到的一列（名次還沒確定）。"""
+
+    rank: int | None
+    name_text: str
+    role_text: str
+    damage: int
+    challenges: int
+
+
+@dataclass
 class AbyssResult:
     rows: list[AbyssRow] = field(default_factory=list)
     complete: bool = False
@@ -104,8 +122,8 @@ class AbyssReader:
             image = after
         return image
 
-    def _read_row(self, image: np.ndarray, top: int) -> tuple[str, int, int, str] | None:
-        """回傳（暱稱原文、傷害、挑戰次數、職位原文）；數值讀不出來時重新截圖再讀。"""
+    def _read_row(self, image: np.ndarray, top: int) -> PageRow | None:
+        """讀一列；傷害或挑戰次數讀不出來時重新截圖再讀。名次讀不出來時為 None（之後推算）。"""
         for attempt in range(self.retries):
             if attempt:
                 self.d.sleep(0.3)
@@ -113,42 +131,52 @@ class AbyssReader:
             damage = parse_int(self.d.ocr(image, row_damage_roi(top)))
             challenges = parse_int(self.d.ocr(image, row_challenges_roi(top)))
             if damage is not None and challenges is not None:
-                return (
-                    self.d.ocr(image, row_name_roi(top)),
-                    damage,
-                    challenges,
-                    self.d.ocr(image, row_role_roi(top)),
+                return PageRow(
+                    rank=parse_int(self.d.ocr(image, row_rank_roi(top))),
+                    name_text=self.d.ocr(image, row_name_roi(top)),
+                    role_text=self.d.ocr(image, row_role_roi(top)),
+                    damage=damage,
+                    challenges=challenges,
                 )
         return None
 
     @staticmethod
-    def _overlap(result: AbyssResult, page: list[tuple[str, int, int, str]]) -> int:
-        """這一頁開頭與已讀名單結尾重疊的列數。
+    def _page_base(result: AbyssResult, page: list[PageRow], at_top: bool) -> int | None:
+        """這一頁第一列的名次。
 
-        以「傷害＋挑戰次數」的順序對齊（數字的 OCR 最穩定）：找已讀名單結尾與這一頁開頭
-        最長的相同序列。不用暱稱比對，避免同一列兩次讀得不一樣時名次錯位。
+        以讀得出的名次推算（名次減去在頁中的位置，取最多列一致的值；個別讀錯的名次會被蓋過）。
+        整頁都讀不出名次時：在名單最上面就是第 1 名，否則以「傷害＋挑戰次數」與已讀名單結尾對齊。
         """
+        bases = [r.rank - i for i, r in enumerate(page) if r.rank is not None and r.rank >= 1]
+        if bases:
+            return Counter(bases).most_common(1)[0][0]
+        if at_top:
+            return 1
         numbers = [(r.damage, r.challenges) for r in result.rows]
-        incoming = [(damage, challenges) for _, damage, challenges, _ in page]
+        incoming = [(r.damage, r.challenges) for r in page]
         for k in range(min(len(numbers), len(incoming)), 0, -1):
             if numbers[-k:] == incoming[:k]:
-                return k
-        return 0
+                return len(result.rows) - k + 1
+        return None
 
     @staticmethod
-    def _append(result: AbyssResult, rows: list[tuple[str, int, int, str]]) -> None:
-        for name_text, damage, challenges, role_text in rows:
+    def _append(result: AbyssResult, page: list[PageRow], base: int) -> None:
+        """加入名次大於已讀最後名次的列（重複出現的列略過）。"""
+        for i, r in enumerate(page):
+            rank = base + i
+            if rank <= len(result.rows):
+                continue
             result.rows.append(
                 AbyssRow(
-                    rank=len(result.rows) + 1,
-                    name=parse_name(name_text),
-                    role=parse_role(role_text),
-                    damage=damage,
-                    challenges=challenges,
+                    rank=rank,
+                    name=parse_name(r.name_text),
+                    role=parse_role(r.role_text),
+                    damage=r.damage,
+                    challenges=r.challenges,
                 )
             )
 
-    def _read_page(self, image: np.ndarray) -> tuple[list[tuple[str, int, int, str]], bool]:
+    def _read_page(self, image: np.ndarray) -> tuple[list[PageRow], bool]:
         """讀這一頁完整露出的列；遇到數字讀不出來的列就停在那裡（回傳 failed=True）。"""
         page = []
         for top in find_row_tops(image):
@@ -175,27 +203,35 @@ class AbyssReader:
             return result
         image = self._scroll_to_top(image)
 
-        first_page = True
+        at_top = True
         for _page in range(self.max_pages):
             page, failed = self._read_page(image)
-            overlap = 0
-            if not first_page:
-                overlap = self._overlap(result, page)
-                for _ in range(self.retries):
-                    if overlap:
-                        break
-                    # 與上一頁沒有重疊：可能滑過頭，往回拖再讀
-                    image = self._drag(DRAG_TO, DRAG_TO + DRAG_BACK)
-                    page, failed = self._read_page(image)
-                    overlap = self._overlap(result, page)
-                if not overlap:
-                    result.stop_reason = "滑動後找不到與上一頁重疊的列，為避免名次錯位已停止，已讀部分存在本機。"
-                    return result
-            self._append(result, page[overlap:])
+            base = self._page_base(result, page, at_top) if page else len(result.rows) + 1
+            for _ in range(self.retries):
+                # 與已讀名次之間沒有缺號才合併；在最上面時第一列必須是第 1 名
+                if base is not None and (base == 1 if at_top else base <= len(result.rows) + 1):
+                    break
+                if at_top:
+                    break
+                image = self._drag(DRAG_TO, DRAG_TO + DRAG_BACK)  # 可能滑過頭：往回拖再讀
+                page, failed = self._read_page(image)
+                base = self._page_base(result, page, at_top) if page else len(result.rows) + 1
+            if base is None or (base != 1 if at_top else base > len(result.rows) + 1):
+                if at_top:
+                    result.stop_reason = f"名單最上面的名次是第 {base} 名，不是第 1 名，已停止。請確認名單已滑到最上面。"
+                else:
+                    result.stop_reason = (
+                        f"已讀到第 {len(result.rows)} 名，但下一頁從第 {base} 名開始，中間有缺號；"
+                        "為避免漏掉已停止，已讀部分存在本機。"
+                        if base is not None
+                        else "滑動後找不到與上一頁重疊的列，為避免名次錯位已停止，已讀部分存在本機。"
+                    )
+                return result
+            self._append(result, page, base)
             if failed:
                 result.stop_reason = f"第 {len(result.rows) + 1} 名的傷害或挑戰次數讀不出來，已停止，已讀部分存在本機。"
                 return result
-            first_page = False
+            at_top = False
             before = image
             image = self._drag(DRAG_FROM, DRAG_TO)
             if not region_changed(before, image, LIST_REGION):

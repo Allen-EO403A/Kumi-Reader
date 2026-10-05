@@ -22,6 +22,7 @@ class Entry:
     challenges: int
     unreadable_damage: bool = False
     second_look_name: str | None = None  # 第二次出現時 OCR 讀到的暱稱（模擬讀取不一致）
+    rank_text: str | None = None  # 名次 OCR 的結果；None 時為正確名次（"" 模擬金銀銅圖示讀不出）
 
 
 @dataclass
@@ -66,6 +67,8 @@ class FakeAbyss:
                 return e.second_look_name if again else e.name
             if roi == F.row_role_roi(top):
                 return e.role
+            if roi == F.row_rank_roi(top):
+                return str(index + 1) if e.rank_text is None else e.rank_text
             if roi == F.row_damage_roi(top):
                 return "??" if e.unreadable_damage else str(e.damage)
             if roi == F.row_challenges_roi(top):

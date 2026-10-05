@@ -52,14 +52,6 @@ def test_stops_and_keeps_rows_when_a_number_is_unreadable():
     assert body["batchId"] == 3
 
 
-def test_stops_instead_of_skipping_when_pages_do_not_overlap():
-    entries = make_entries(20)
-    game = FakeAbyss(entries, overshoot=4, drag_back_works=False)  # 每次多滑 4 列、回不去
-    result = F.AbyssReader(game).run()
-    assert "名次錯位" in result.stop_reason
-    assert [r.name for r in result.rows] == [e.name for e in entries[:5]]  # 只保留確定連續的部分
-
-
 def test_refuses_to_start_on_another_tab():
     game = FakeAbyss(make_entries(5), family_tab=False)
     result = F.AbyssReader(game).run()
@@ -82,3 +74,39 @@ def test_build_upload_shape():
 def test_find_row_tops_on_synthetic_offsets():
     image = FakeAbyss(make_entries(5)).screencap()
     assert F.find_row_tops(image) == TOPS
+
+
+def test_medal_ranks_at_top_are_inferred_from_the_rest_of_the_page():
+    entries = make_entries(9)
+    for e in entries[:3]:
+        e.rank_text = ""  # 前三名是金銀銅圖示，讀不出數字
+    result = F.AbyssReader(FakeAbyss(entries)).run()
+    assert result.complete
+    assert [r.rank for r in result.rows] == list(range(1, 10))
+    assert result.rows[0].name == "玩家1"
+
+
+def test_a_misread_rank_is_outvoted_by_the_rest_of_the_page():
+    entries = make_entries(9)
+    entries[6].rank_text = "1"  # 第 7 名讀成 1
+    result = F.AbyssReader(FakeAbyss(entries)).run()
+    assert [(r.rank, r.name) for r in result.rows] == [(i + 1, f"玩家{i + 1}") for i in range(9)]
+
+
+def test_rows_with_identical_numbers_are_not_merged():
+    # 傷害與挑戰次數完全相同的兩人：以名次合併，不會被當成同一列
+    entries = make_entries(9)
+    for e in entries[3:6]:
+        e.damage, e.challenges = 5_000_000, 21
+    result = F.AbyssReader(FakeAbyss(entries)).run()
+    assert [r.rank for r in result.rows] == list(range(1, 10))
+    assert [r.name for r in result.rows] == [e.name for e in entries]
+
+
+def test_stops_when_a_gap_in_ranks_cannot_be_closed():
+    entries = make_entries(20)
+    game = FakeAbyss(entries, overshoot=3, drag_back_works=False)  # 每次多滑 3 列，往回拖也回不去
+    result = F.AbyssReader(game).run()
+    assert not result.complete
+    assert "缺號" in result.stop_reason
+    assert [r.rank for r in result.rows] == list(range(1, len(result.rows) + 1))

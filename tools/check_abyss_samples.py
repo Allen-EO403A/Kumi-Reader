@@ -80,12 +80,13 @@ def main(patterns: list[str]) -> None:
         header = ocr(image, F.HEADER_ROI)
         print(f"== {Path(path).name}（表頭「{header}」，家族狀況分頁：{F.on_family_tab(image, header)}）")
         for top in F.find_row_tops(image):
+            rank = ocr(image, F.row_rank_roi(top))
             name = ocr(image, F.row_name_roi(top))
             role = ocr(image, F.row_role_roi(top))
             damage = ocr(image, F.row_damage_roi(top))
             challenges = ocr(image, F.row_challenges_roi(top))
             print(
-                f"  列 y={top}：暱稱「{name}」→{parse_name(name)} 職位「{role}」→{parse_role(role)} "
+                f"  列 y={top}：名次「{rank}」暱稱「{name}」→{parse_name(name)} 職位「{role}」→{parse_role(role)} "
                 f"傷害「{damage}」→{parse_int(damage)} 挑戰「{challenges}」→{parse_int(challenges)}"
             )
 
