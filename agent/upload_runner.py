@@ -105,7 +105,7 @@ def upload_abyss(session: Session, saved: dict) -> bool:
 
     store.clear_abyss(session.data_dir)
     if res["status"] == "incomplete":
-        log.warn("這次上傳的是沒讀完的排行。排行清空前再讀一次並上傳，會接續同一批次。")
+        log.warn("這次上傳的是沒讀完的排行。下一個週五 20:00（排行清空）前再讀一次並上傳，會接續同一批次。")
     log.success(
         f"已上傳深淵排行（{res['periodStart']} 起的深淵週期）：新增 {res['inserted']} 列、取代 {res['replaced']} 列；"
         f"對上 {res['matched']}、對不到 {res['unmatched']}、有疑義 {res['ambiguous']}。請到網站「深淵審核」確認。"
