@@ -1,3 +1,19 @@
+# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Copyright (C) 2026 Allen <allen@umail.tw>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """打包給管理員使用的資料夾與 zip（decisions.md 第 19 節）。
 
 內容：MFAAvalonia v2.16.2（介面）＋MaaFramework 5.14.2 執行檔（取代 MFAAvalonia 內附的版本，
@@ -5,8 +21,9 @@
 
 用法（在本 repo 的開發環境中，需為 Windows x64 的 Python 3.13）：
   python tools/download_ocr_model.py
-  python tools/build_package.py 0.1.0
+  python tools/build_package.py 0.4.0
 輸出：install/（可直接執行）與 dist/<repo 名稱>-v<版本>.zip。下載的檔案快取在 .cache/。
+發布用的安裝程式（exe）由 tools/build_installer.py 產生，會先呼叫本程式。
 """
 from __future__ import annotations
 
@@ -109,6 +126,10 @@ def install_app(version: str) -> None:
     shutil.copy2(ROOT / "assets" / "使用說明.md", INSTALL / "使用說明.md")  # MFAAvalonia 首次開啟時顯示
     shutil.copy2(ROOT / ".env.example", INSTALL / ".env.example")
     shutil.copy2(ROOT / "README.md", INSTALL / "README.md")
+    # GPL：授權全文、第三方元件授權與聲明（THIRD_PARTY_NOTICES.md）
+    shutil.copy2(ROOT / "LICENSE", INSTALL / "LICENSE.txt")
+    shutil.copy2(ROOT / "THIRD_PARTY_NOTICES.md", INSTALL / "THIRD_PARTY_NOTICES.md")
+    shutil.copytree(ROOT / "third_party" / "licenses", INSTALL / "licenses", dirs_exist_ok=True)
 
 
 def verify() -> None:

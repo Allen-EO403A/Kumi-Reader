@@ -1,3 +1,19 @@
+# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Copyright (C) 2026 Allen <allen@umail.tw>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """程式 B：讀取深淵排行「家族狀況」分頁（reader.md、decisions.md 第 18、19 節）。
 
 不點擊任何東西：先滑到最上面，然後逐頁讀取完整露出的每一列（名次、暱稱、職位、傷害、挑戰次數），

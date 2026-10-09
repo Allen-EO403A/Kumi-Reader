@@ -20,3 +20,9 @@ __pycache__/
 .pytest_cache/
 # 打包時下載的檔案快取
 .cache/
+
+# 給 AI 助理的內部開發說明，不公開
+CLAUDE.md
+
+# 安裝程式內附的 .NET 安裝檔、編譯輸出
+*.part

@@ -1,3 +1,19 @@
+# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Copyright (C) 2026 Allen <allen@umail.tw>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """開發用：不經 MFAAvalonia，直接連雷電模擬器執行讀取任務。
 
 用法：python tools/dev_run.py [模擬器名稱或位址的一部分，例如 A1] [--missing | --abyss | --upload]

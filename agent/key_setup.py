@@ -1,3 +1,19 @@
+# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Copyright (C) 2026 Allen <allen@umail.tw>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """「設定金鑰（從剪貼簿）」：把網站複製的讀取程式金鑰寫進 .env（decisions.md 第 19 節）。
 
 金鑰不經過 MFAAvalonia 的輸入欄位：欄位值會以明碼寫進 maafw.log（2026-10-05 實測），
