@@ -1,4 +1,4 @@
-# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Kumi Reader - 讀取「忍者必須死」家族成員與深淵排行並上傳到 Kumi
 # Copyright (C) 2026 Allen <allen@umail.tw>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -236,3 +236,23 @@ def test_gives_up_after_extra_passes():
     result = F.MembersReader(game, extra_passes=2).run()
     assert not result.complete and "少 2 人" in result.stop_reason
     assert len(game.clicks) == 6 * 3  # 再找時不重開已讀的人
+
+
+def test_uid_needs_two_matching_screenshots():
+    rows = make_rows(6)
+    rows[3].glitch_uid = "371406860012"  # 畫面切換中途截到的錯誤數字
+    game = FakeGame([Page(TOPS, rows)], expected=6)
+    result = F.MembersReader(game).run()
+    assert result.complete
+    assert "371406860012" not in result.members
+    assert rows[3].uid in result.members
+
+
+def test_previous_member_uid_is_treated_as_stale_screen():
+    rows = make_rows(6)
+    rows[3].glitch_uid = rows[2].uid  # 視窗還顯示上一位
+    rows[3].glitch_shots = 2  # 連續兩張都是上一位，也不能採用
+    game = FakeGame([Page(TOPS, rows)], expected=6)
+    result = F.MembersReader(game).run()
+    assert result.complete
+    assert sorted(result.members) == sorted(r.uid for r in rows)

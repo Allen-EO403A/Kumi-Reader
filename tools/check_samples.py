@@ -1,4 +1,4 @@
-# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Kumi Reader - 讀取「忍者必須死」家族成員與深淵排行並上傳到 Kumi
 # Copyright (C) 2026 Allen <allen@umail.tw>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -41,6 +41,7 @@ from maa.toolkit import Toolkit  # noqa: E402
 
 import members_flow as F  # noqa: E402
 from kumi_reader.text import parse_member_count, parse_name, parse_role, parse_uid  # noqa: E402
+from kumi_reader.uid_digits import read_uid  # noqa: E402
 
 
 class StillController(CustomController):
@@ -106,7 +107,8 @@ def main(mode: str, patterns: list[str]) -> None:
             tab = ocr(image, F.PROFILE_TAB_ROI)
             name = ocr(image, F.PROFILE_NAME_ROI)
             uid_text = ocr(image, F.PROFILE_ID_ROI)
-            print(f"  分頁「{tab}」暱稱「{name}」→{parse_name(name)} ID「{uid_text}」→{parse_uid(uid_text)}")
+            print(f"  分頁「{tab}」暱稱「{name}」→{parse_name(name)} ID「{uid_text}」→{parse_uid(uid_text)}"
+                  f"（OCR）／{read_uid(np.array(image[:, :, ::-1]))}（數字字卡，實際採用）")
 
 
 if __name__ == "__main__":

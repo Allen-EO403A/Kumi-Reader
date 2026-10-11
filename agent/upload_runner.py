@@ -1,4 +1,4 @@
-# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Kumi Reader - 讀取「忍者必須死」家族成員與深淵排行並上傳到 Kumi
 # Copyright (C) 2026 Allen <allen@umail.tw>
 #
 # This program is free software: you can redistribute it and/or modify

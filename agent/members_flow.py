@@ -1,4 +1,4 @@
-# Kumi Reader - 讀取「忍者必須死3」家族成員與深淵排行並上傳到 Kumi
+# Kumi Reader - 讀取「忍者必須死」家族成員與深淵排行並上傳到 Kumi
 # Copyright (C) 2026 Allen <allen@umail.tw>
 #
 # This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,8 @@ import numpy as np
 
 from kumi_reader import log
 from kumi_reader.device import Device, Roi, StopRequested, region_changed
-from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_role, parse_uid
+from kumi_reader.text import parse_int, parse_member_count, parse_name, parse_role
+from kumi_reader.uid_digits import read_uid
 
 # ---- 成員列表 ----
 MEMBER_COUNT_ROI: Roi = (130, 762, 240, 52)  # 「成員：99/100」
@@ -135,6 +136,7 @@ class MembersReader:
         self.known = dict(known or {})
         self.on_progress = on_progress or (lambda result, done: None)
         self.last_image: np.ndarray | None = None  # 停止時的畫面（除錯用）
+        self.last_uid: str | None = None  # 上一位讀到的 UID（判斷個人視窗是否已換成下一個人）
         self.expected_override = expected_override  # 管理員自行輸入的成員數
         self.extra_passes = extra_passes  # 到底仍少人時，回到最上面再找的次數
 
@@ -157,7 +159,7 @@ class MembersReader:
     def _back_to_list(self) -> np.ndarray | None:
         """關閉個人視窗後回到列表；若視窗還開著（關閉沒點到），再點一次 X。"""
         for _ in range(self.retries):
-            image = self._wait(self._on_list, seconds=0.8, tries=5)
+            image = self._wait(self._on_list, seconds=0.9, tries=5)
             if image is not None:
                 return image
             if self.last_image is not None and self._profile_open(self.last_image):
@@ -276,19 +278,29 @@ class MembersReader:
         return keys
 
     def _read_profile(self, top: int) -> dict | None:
-        """點頭像 → 個人資訊 → 讀暱稱與 ID → 關閉。讀不出 UID 時回傳 None（這一列記為失敗）。"""
+        """點頭像 → 個人資訊 → 讀暱稱與 ID → 關閉。讀不出 UID 時回傳 None（這一列記為失敗）。
+
+        UID 用數字字卡讀（uid_digits），連續兩張截圖讀到相同的 UID 才採用，避免截到畫面切換中途
+        的圖；讀到和上一位相同的 UID 時，當作視窗還沒換成這個人，繼續等。"""
         self.d.click(*row_avatar(top))
-        if self._wait(self._profile_open) is None:
+        if self._wait(self._profile_open, seconds=0.7) is None:
             return None  # 沒開成個人視窗：不點任何其他地方，回列表繼續
         self.d.click(*PROFILE_TAB)
         member = None
-        for _ in range(self.retries):
-            self.d.sleep(0.5)
+        previous = None
+        for _ in range(self.retries + 2):
+            self.d.sleep(0.6)
             image = self.d.screencap()
-            uid = parse_uid(self.d.ocr(image, PROFILE_ID_ROI))
-            if uid:
+            uid = read_uid(image)
+            if uid is not None and uid == self.last_uid:
+                uid = None
+            if uid is not None and uid == previous:
                 member = {"uid": uid, "name": parse_name(self.d.ocr(image, PROFILE_NAME_ROI))}
+                self.last_uid = uid
                 break
+            previous = uid
+        if member is None:
+            log.warn("這一列的 UID 沒有連續兩次讀到相同的結果，先略過，之後補讀時會再試。")
         self.d.click(*PROFILE_CLOSE)
         return member
 
